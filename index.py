@@ -3,6 +3,7 @@ import re
 import hashlib
 from tabulate import tabulate
 from datetime import datetime
+from fpdf import FPDF
 
 
 def koneksi_db():
@@ -112,6 +113,7 @@ def show_menu(role, user_id):
     else:
         print("Role tidak dikenali.")
         return
+    print("[9] Logout")
     
     pilihan = input("Pilih menu: ")
     if pilihan == '0':
@@ -139,11 +141,18 @@ def show_menu(role, user_id):
         elif pilihan == '2':
             lihat_status_verifikasi(role, user_id)
         elif pilihan == '3':
-            cetak_surat(user_id)
+            cetak_surat(role, user_id)
         elif pilihan == '4':
-            buat_laporan(user_id)
+            buat_laporan(role, user_id)
         elif pilihan == '0':
             show_profile(role, user_id)
+        elif pilihan == '9':
+            main_menu()
+    elif role == "guru":
+        if pilihan == '1':
+            lihat_laporan(role, user_id)
+        elif pilihan == '2':
+            beri_nilai_akhir(role, user_id)
         elif pilihan == '9':
             main_menu()
     else:
@@ -474,7 +483,7 @@ def verifikasi_pengajuan_siswa(role, user_id):
     
     if not data:
         print("Tidak ada pengajuan yang perlu diverifikasi.")
-        return
+        show_menu(role, user_id)
 
     # Tampilkan data dalam tabel
     print("+----+----------------+----------------+-----------------+---------------------+")
@@ -560,40 +569,490 @@ def lihat_status_verifikasi(role, user_id):
     conn = koneksi_db()
     cur = conn.cursor()
 
-    print("\n=== STATUS VERIFIKASI PKL ===")
+    print("\n=== DAFTAR PENDAFTARAN PKL ===")
 
+    # Ambil semua data pendaftaran berdasarkan user
     query = """
+        SELECT p.id, per.nama_periode, m.nama AS nama_mitra, p.status_pendaftaran, p.tanggal_daftar
+        FROM pendaftaran_pkl p
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
+        WHERE p.user_id = %s
+        ORDER BY p.tanggal_daftar DESC
+    """
+    cur.execute(query, (user_id,))
+    results = cur.fetchall()
+
+    if not results:
+        print("Belum ada pengajuan PKL yang ditemukan.")
+        show_menu(role, user_id)
+        return
+
+    # Tampilkan daftar dalam bentuk tabel
+    print("+----+-------------------+----------------+---------------------+------------------+")
+    print("| ID | Periode           | Mitra          | Status Pendaftaran  | Tanggal Daftar   |")
+    print("+----+-------------------+----------------+---------------------+------------------+")
+    for row in results:
+        print(f"| {str(row[0]).ljust(2)} | {row[1].ljust(17)} | {row[2].ljust(14)} | {row[3].ljust(19)} | {str(row[4])} |")
+    print("+----+-------------------+----------------+---------------------+------------------+")
+
+    # Pilih salah satu untuk lihat detail
+    id_pilihan = input("Masukkan ID pendaftaran yang ingin dilihat detailnya: ")
+
+    # Ambil data detail berdasarkan ID pilihan
+    detail_query = """
         SELECT p.id, m.nama, m.alamat, m.kontak_person,
                per.nama_periode, per.tanggal_mulai, per.tanggal_selesai,
                p.status_pendaftaran, p.tanggal_daftar
         FROM pendaftaran_pkl p
         JOIN mitra_pkl m ON p.mitra_id = m.id
         JOIN periode_pkl per ON p.periode_id = per.id
-        WHERE p.user_id = %s
-        ORDER BY p.tanggal_daftar DESC
-        LIMIT 1
+        WHERE p.id = %s AND p.user_id = %s
     """
-    cur.execute(query, (user_id,))
-    result = cur.fetchone()
+    cur.execute(detail_query, (id_pilihan, user_id))
+    detail = cur.fetchone()
 
-    if result:
+    if detail:
+        print("\n=== DETAIL PENDAFTARAN PKL ===")
         print(f"""
-ID Pendaftaran     : {result[0]}
-Nama Mitra         : {result[1]}
-Alamat Mitra       : {result[2]}
-Kontak Person      : {result[3]}
-Periode PKL        : {result[4]}
-Tanggal Mulai      : {result[5]}
-Tanggal Selesai    : {result[6]}
-Status Pendaftaran : {result[7]}
-Tanggal Daftar     : {result[8]}
+ID Pendaftaran     : {detail[0]}
+Nama Mitra         : {detail[1]}
+Alamat Mitra       : {detail[2]}
+Kontak Person      : {detail[3]}
+Periode PKL        : {detail[4]}
+Tanggal Mulai      : {detail[5]}
+Tanggal Selesai    : {detail[6]}
+Status Pendaftaran : {detail[7]}
+Tanggal Daftar     : {detail[8]}
         """)
     else:
-        print("Belum ada pengajuan PKL yang ditemukan.")
+        print("ID pendaftaran tidak ditemukan atau tidak sesuai dengan akun Anda.")
 
     # Kembali ke menu siswa
     show_menu(role, user_id)
 
+def cetak_surat(role, user_id):
+    conn = koneksi_db()
+    cur = conn.cursor()
+
+    # Ambil semua pendaftaran user
+    query = """
+        SELECT p.id, per.nama_periode, m.nama AS nama_mitra, p.status_pendaftaran
+        FROM pendaftaran_pkl p
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
+        WHERE p.user_id = %s
+        ORDER BY p.tanggal_daftar DESC
+    """
+    cur.execute(query, (user_id,))
+    results = cur.fetchall()
+
+    if not results:
+        print("Belum ada data pendaftaran PKL.")
+        return
+
+    # Tampilkan daftar pendaftaran
+    print("\n=== DAFTAR PKL UNTUK CETAK SURAT ===")
+    print("+----+-------------------+----------------+---------------------+")
+    print("| ID | Periode           | Mitra          | Status Pendaftaran  |")
+    print("+----+-------------------+----------------+---------------------+")
+    for row in results:
+        print(f"| {str(row[0]).ljust(2)} | {row[1].ljust(17)} | {row[2].ljust(14)} | {row[3].ljust(19)} |")
+    print("+----+-------------------+----------------+---------------------+")
+
+    id_pendaftaran = input("Masukkan ID pendaftaran yang ingin dicetak suratnya: ")
+
+    # Ambil data detail untuk surat
+    detail_query = """
+        SELECT u.nama, u.no_induk, m.nama, m.alamat, m.kontak_person, 
+               per.nama_periode, per.tanggal_mulai, per.tanggal_selesai, p.id
+        FROM pendaftaran_pkl p
+        JOIN users u ON p.user_id = u.id
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
+        WHERE p.id = %s AND p.user_id = %s
+    """
+    cur.execute(detail_query, (id_pendaftaran, user_id))
+    data = cur.fetchone()
+
+    if not data:
+        print("Data tidak ditemukan atau tidak sesuai.")
+        return
+
+    # Ambil data
+    nama_user, no_induk, nama_mitra, alamat_mitra, kontak, periode, tgl_mulai, tgl_selesai, id_pendaftar = data
+
+    # Buat PDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, "SURAT PENGANTAR PRAKTIK KERJA LAPANGAN (PKL)", ln=True, align="C")
+    pdf.ln(10)
+
+    pdf.set_font("Arial", "", 12)
+    pdf.multi_cell(0, 10, f"""
+Dengan hormat,
+
+Sehubungan dengan pelaksanaan kegiatan Praktik Kerja Lapangan (PKL), kami dari sekolah memberikan pengantar kepada siswa berikut:
+
+Nama     : {nama_user}
+NISN     : {no_induk}
+Periode  : {periode} ({tgl_mulai} s.d {tgl_selesai})
+
+Untuk melaksanakan PKL di:
+
+Mitra    : {nama_mitra}
+Alamat   : {alamat_mitra}
+Kontak   : {kontak}
+
+Demikian surat ini dibuat untuk digunakan sebagaimana mestinya.
+
+Hormat kami,
+
+
+
+Panitia PKL
+""")
+
+    # Simpan file PDF
+    nama_file = f"{id_pendaftar}_{nama_user.replace(' ', '_')}.pdf"
+    pdf.output(nama_file)
+    print(f"Surat pengantar berhasil dicetak: {nama_file}")
+    show_menu(role, user_id)
+
+def buat_laporan(role, user_id):
+    import psycopg2
+    conn = koneksi_db()
+    cur = conn.cursor()
+
+    print("\n=== BUAT LAPORAN PKL ===")
+
+    # Tampilkan daftar pendaftaran PKL siswa
+    query_pkl = """
+        SELECT p.id, m.nama, per.nama_periode
+        FROM pendaftaran_pkl p
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
+        WHERE p.user_id = %s
+    """
+    cur.execute(query_pkl, (user_id,))
+    pkl_list = cur.fetchall()
+
+    if not pkl_list:
+        print("Kamu belum pernah mendaftar PKL.")
+        return
+
+    # Tampilkan daftar PKL
+    print("+----+--------------------+--------------------+")
+    print("| ID | Nama Mitra         | Periode            |")
+    print("+----+--------------------+--------------------+")
+    for pkl in pkl_list:
+        print(f"| {str(pkl[0]).ljust(2)} | {pkl[1].ljust(18)} | {pkl[2].ljust(18)} |")
+    print("+----+--------------------+--------------------+")
+
+    try:
+        pkl_id = int(input("Masukkan ID Pendaftaran PKL | [0] untuk batalkan: "))
+        if pkl_id == 0:
+            return show_menu(role, user_id)  # ✅ kembali ke menu utama
+    except ValueError:
+        print("ID tidak valid.")
+        return buat_laporan(role, user_id)
+
+
+    # Tampilkan semua laporan sebelumnya
+    query_laporan = """
+        SELECT id, tanggal, kegiatan, catatan
+        FROM laporan_pkl
+        WHERE user_id = %s AND pendaftaran_pkl = %s
+        ORDER BY tanggal DESC
+    """
+    cur.execute(query_laporan, (user_id, pkl_id))
+    laporan_list = cur.fetchall()
+
+    if laporan_list:
+        print("\n=== Laporan Sebelumnya ===")
+        print("+----+------------+------------------------------+----------------+")
+        print("| ID | Tanggal    | Kegiatan                     | Catatan        |")
+        print("+----+------------+------------------------------+----------------+")
+        for lap in laporan_list:
+            print(f"| {str(lap[0]).ljust(2)} | {str(lap[1])} | {lap[2][:28].ljust(28)} | {lap[3][:14].ljust(14)} |")
+        print("+----+------------+------------------------------+----------------+")
+    else:
+        print("Belum ada laporan untuk pendaftaran ini.")
+
+    # Menu aksi
+    print("\nPilih aksi:")
+    print("[1] Tambah Laporan Baru")
+    print("[2] Edit Laporan Sebelumnya")
+    print("[3] Hapus Laporan")
+    print("[0] Kembali")
+
+    aksi = input("Pilihan: ")
+
+    if aksi == '1':
+        tanggal = input("Masukkan tanggal (YYYY-MM-DD): ")
+        kegiatan = input("Masukkan kegiatan harian PKL: ")
+        catatan = input("Masukkan catatan tambahan: ")
+
+        try:
+            query_insert = """
+                INSERT INTO laporan_pkl (user_id, tanggal, kegiatan, catatan, pendaftaran_pkl)
+                VALUES (%s, %s, %s, %s, %s)
+            """
+            cur.execute(query_insert, (user_id, tanggal, kegiatan, catatan, pkl_id))
+            conn.commit()
+            print("✅ Laporan berhasil ditambahkan.\n")
+        except Exception as e:
+            print("❌ Terjadi kesalahan saat menyimpan laporan:", e)
+
+        return buat_laporan(role, user_id)
+
+    elif aksi == '2':
+        try:
+            edit_id = int(input("Masukkan ID laporan yang ingin diedit: "))
+            cur.execute("SELECT tanggal, kegiatan, catatan FROM laporan_pkl WHERE id = %s AND user_id = %s", (edit_id, user_id))
+            existing = cur.fetchone()
+
+            if not existing:
+                print("❌ Laporan tidak ditemukan.")
+                return buat_laporan(role, user_id)
+
+            tanggal_lama, kegiatan_lama, catatan_lama = existing
+
+            tanggal = input(f"Masukkan tanggal baru (Enter untuk tetap '{tanggal_lama}'): ") or tanggal_lama
+            kegiatan = input(f"Masukkan kegiatan baru (Enter untuk tetap '{kegiatan_lama}'): ") or kegiatan_lama
+            catatan = input(f"Masukkan catatan baru (Enter untuk tetap '{catatan_lama}'): ") or catatan_lama
+
+            query_update = """
+                UPDATE laporan_pkl
+                SET tanggal = %s, kegiatan = %s, catatan = %s
+                WHERE id = %s AND user_id = %s
+            """
+            cur.execute(query_update, (tanggal, kegiatan, catatan, edit_id, user_id))
+            conn.commit()
+            print("✅ Laporan berhasil diperbarui.\n")
+            show_menu(role, user_id)
+        except Exception as e:
+            print("❌ Gagal memperbarui laporan:", e)
+
+        return buat_laporan(role, user_id)
+
+    elif aksi == '3':
+        try:
+            del_id = int(input("Masukkan ID laporan yang ingin dihapus: "))
+            query_delete = "DELETE FROM laporan_pkl WHERE id = %s AND user_id = %s"
+            cur.execute(query_delete, (del_id, user_id))
+            conn.commit()
+            print("✅ Laporan berhasil dihapus.\n")
+        except Exception as e:
+            print("❌ Gagal menghapus laporan:", e)
+
+        return buat_laporan(role, user_id)
+
+    elif aksi == '0':
+        show_menu(role, user_id)
+
+    else:
+        print("❌ Pilihan tidak valid.\n")
+        return buat_laporan(role, user_id)
+
+    conn.close()
+
+# ROLE GURU
+def lihat_laporan(role, user_id):
+    conn = koneksi_db()
+    cur = conn.cursor()
+
+    print("\n=== DAFTAR LAPORAN SISWA BIMBINGAN ===")
+
+    query = """
+        SELECT l.id, u.nama AS nama_siswa, m.nama AS nama_mitra, l.tanggal, l.kegiatan, l.nilai
+        FROM laporan_pkl l
+        JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id
+        JOIN users u ON p.user_id = u.id
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        WHERE p.guru_id = %s
+        ORDER BY l.tanggal DESC
+    """
+    cur.execute(query, (user_id,))
+    laporan_list = cur.fetchall()
+
+    if not laporan_list:
+        print("Belum ada laporan dari siswa bimbingan Anda.\n")
+        return show_menu(role, user_id)
+
+    print("+----+--------------------+----------------------+------------+----------------------------+--------+")
+    print("| ID | Nama Siswa         | Mitra PKL            | Tanggal    | Kegiatan                   | Nilai  |")
+    print("+----+--------------------+----------------------+------------+----------------------------+--------+")
+    for lap in laporan_list:
+        nilai = str(lap[5]) if lap[5] is not None else "-"
+        print(f"| {str(lap[0]).ljust(2)} | {lap[1][:20].ljust(20)} | {lap[2][:20].ljust(20)} | {lap[3]} | {lap[4][:26].ljust(26)} | {nilai.center(6)} |")
+    print("+----+--------------------+----------------------+------------+----------------------------+--------+")
+
+
+    # Pilih untuk lihat detail
+    try:
+        laporan_id = int(input("\nMasukkan ID laporan untuk melihat detail (0 untuk kembali): "))
+        if laporan_id == 0:
+            return show_menu(role, user_id)
+    except ValueError:
+        print("ID tidak valid.")
+        return lihat_laporan(role, user_id)
+
+   # Ambil detail laporan
+    detail_query = """
+        SELECT l.id, u.nama, m.nama, l.tanggal, l.kegiatan, l.catatan, l.nilai
+        FROM laporan_pkl l
+        JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id
+        JOIN users u ON p.user_id = u.id
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        WHERE l.id = %s AND p.guru_id = %s
+    """
+    cur.execute(detail_query, (laporan_id, user_id))
+    detail = cur.fetchone()
+
+    if detail:
+        nilai_saat_ini = detail[6] if detail[6] else "-"
+        print(f"""
+        === DETAIL LAPORAN ===
+        ID Laporan   : {detail[0]}
+        Nama Siswa   : {detail[1]}
+        Mitra PKL    : {detail[2]}
+        Tanggal      : {detail[3]}
+        Kegiatan     : {detail[4]}
+        Catatan      : {detail[5]}
+        Nilai        : {nilai_saat_ini}
+        """)
+
+        ubah = input("Ingin memberikan/mengubah nilai? (y/n): ").lower()
+        if ubah == 'y':
+            nilai_baru = input("Masukkan nilai baru: ").strip()
+            if nilai_baru:
+                try:
+                    nilai_baru_int = int(nilai_baru)
+                    if 0 <= nilai_baru_int <= 100:
+                        cur.execute("UPDATE laporan_pkl SET nilai = %s WHERE id = %s", (nilai_baru_int, laporan_id))
+                        conn.commit()
+                        print("✅ Nilai berhasil disimpan.")
+                    else:
+                        print("❌ Nilai harus antara 0 hingga 100.")
+                except ValueError:
+                    print("❌ Nilai harus berupa angka.")
+        else:
+            print("Tidak jadi melakukan edit nilai siswa")
+
+
+    input("\nTekan Enter untuk kembali...")
+    return lihat_laporan(role, user_id)
+
+def beri_nilai_akhir(role, user_id):
+    conn = koneksi_db()
+    cur = conn.cursor()
+
+    print("\n=== PENILAIAN AKHIR SISWA BIMBINGAN ===")
+
+    # 1. Tampilkan daftar siswa yang dibimbing
+    query = """
+        SELECT 
+        p.id, u.nama, m.nama, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai,
+        pn.nilai
+        FROM pendaftaran_pkl p
+        JOIN users u ON p.user_id = u.id
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
+        LEFT JOIN penilaian pn ON pn.siswa_id = p.id AND pn.guru_id = %s
+        WHERE p.guru_id = %s
+    """
+    cur.execute(query, (user_id, user_id))
+    siswa_list = cur.fetchall()
+
+
+    if not siswa_list:
+        print("Belum ada siswa bimbingan.")
+        input("\nTekan Enter untuk kembali...")
+        return show_menu(role, user_id)
+    print("+----+--------------------+--------------------+----------------------+------------+------------+--------+")
+    print("| ID | Nama Siswa         | Mitra PKL          | Periode              | Mulai      | Selesai    | Nilai  |")
+    print("+----+--------------------+--------------------+----------------------+------------+------------+--------+")
+    for s in siswa_list:
+        nilai = s[6] if s[6] is not None else '-'  # Indeks ke-6 sesuai kolom nilai
+        print(f"| {str(s[0]).ljust(2)} | {s[1][:20].ljust(20)} | {s[2][:20].ljust(20)} | {s[3][:20].ljust(20)} | {s[4]} | {s[5]} | {str(nilai).center(5)} |")
+    print("+----+--------------------+--------------------+----------------------+------------+------------+--------+")
+
+
+    # 2. Pilih siswa untuk dinilai
+    try:
+        siswa_id = int(input("\nMasukkan ID siswa yang ingin dinilai (0 untuk kembali): "))
+        if siswa_id == 0:
+            return show_menu(role, user_id)
+    except ValueError:
+        print("❌ ID tidak valid.")
+        return beri_nilai_akhir(role, user_id)
+
+    # Pastikan siswa adalah bimbingan user
+    cur.execute("""
+        SELECT 
+            p.id, u.nama, m.nama, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai
+        FROM pendaftaran_pkl p
+        JOIN users u ON p.user_id = u.id
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
+        WHERE p.id = %s AND p.guru_id = %s
+    """, (siswa_id, user_id))
+    siswa = cur.fetchone()
+
+
+    if not siswa:
+        print("❌ Siswa tidak ditemukan atau bukan bimbingan Anda.")
+        input("\nTekan Enter untuk kembali...")
+        return beri_nilai_akhir(role, user_id)
+
+    print(f"""
+    === DETAIL SISWA ===
+    ID Pendaftaran : {siswa[0]}
+    Nama Siswa     : {siswa[1]}
+    Mitra PKL      : {siswa[2]}
+    Periode        : {siswa[3]}
+    Tanggal Mulai  : {siswa[4]}
+    Tanggal Selesai: {siswa[5]}
+    """)
+
+
+    # 3. Masukkan nilai dan catatan evaluasi
+    try:
+        nilai = int(input("Masukkan nilai akhir / edit (0-100): "))
+        if not (0 <= nilai <= 100):
+            print("❌ Nilai harus antara 0 sampai 100.")
+            return beri_nilai_akhir(role, user_id)
+    except ValueError:
+        print("❌ Nilai harus berupa angka.")
+        return beri_nilai_akhir(role, user_id)
+
+    catatan = input("Masukkan catatan evaluasi (opsional): ").strip()
+
+    # Cek apakah penilaian sudah ada
+    cur.execute("SELECT id FROM penilaian WHERE siswa_id = %s AND guru_id = %s", (siswa_id, user_id))
+    existing = cur.fetchone()
+
+    try:
+        if existing:
+            cur.execute("""
+                UPDATE penilaian SET nilai = %s, catatan_evaluasi = %s WHERE id = %s
+            """, (nilai, catatan, existing[0]))
+            print("✅ Penilaian berhasil diperbarui.")
+        else:
+            cur.execute("""
+                INSERT INTO penilaian (siswa_id, guru_id, nilai, catatan_evaluasi)
+                VALUES (%s, %s, %s, %s)
+            """, (siswa_id, user_id, nilai, catatan))
+            print("✅ Penilaian berhasil disimpan.")
+
+        conn.commit()
+    except Exception as e:
+        print("❌ Terjadi kesalahan saat menyimpan penilaian:", e)
+
+    input("\nTekan Enter untuk kembali...")
+    return show_menu(role, user_id)
 
 # Semua role
 def show_profile(role, user_id):
