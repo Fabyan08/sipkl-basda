@@ -47,9 +47,9 @@ def register():
     role = input("Pilih (1/2): ")
 
     if role == '1':
-        role = 'siswa'
+        role = 3
     elif role == '2':
-        role = 'guru'
+        role = 2
     else:
         print("Pilihan tidak valid.")
         return
@@ -374,7 +374,7 @@ def kelola_data_periode(role, user_id):
     while True:
         conn = koneksi_db()
         cur = conn.cursor()
-        cur.execute("SELECT id, nama_periode, tanggal_mulai, tanggal_selesai, status_aktif FROM periode_pkl ORDER BY id")
+        cur.execute("SELECT id, nama_periode, tanggal_mulai, tanggal_selesai, status FROM periode_pkl ORDER BY id")
         data = cur.fetchall()
         cur.close()
         conn.close()
@@ -411,7 +411,7 @@ def tambah_periode():
     conn = koneksi_db()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO periode_pkl (nama_periode, tanggal_mulai, tanggal_selesai, status_aktif) VALUES (%s, %s, %s, %s)",
+        "INSERT INTO periode_pkl (nama_periode, tanggal_mulai, tanggal_selesai, status) VALUES (%s, %s, %s, %s)",
         (nama, mulai, selesai, status)
     )
     conn.commit()
@@ -425,7 +425,7 @@ def edit_periode():
 
     conn = koneksi_db()
     cur = conn.cursor()
-    cur.execute("SELECT nama_periode, tanggal_mulai, tanggal_selesai, status_aktif FROM periode_pkl WHERE id = %s", (id_edit,))
+    cur.execute("SELECT nama_periode, tanggal_mulai, tanggal_selesai, status FROM periode_pkl WHERE id = %s", (id_edit,))
     data = cur.fetchone()
     if not data:
         print("Data tidak ditemukan.")
@@ -443,7 +443,7 @@ def edit_periode():
 
     cur.execute("""
         UPDATE periode_pkl
-        SET nama_periode = %s, tanggal_mulai = %s, tanggal_selesai = %s, status_aktif = %s
+        SET nama_periode = %s, tanggal_mulai = %s, tanggal_selesai = %s, status = %s
         WHERE id = %s
     """, (nama, mulai, selesai, status, id_edit))
     conn.commit()
@@ -473,7 +473,7 @@ def verifikasi_pengajuan_siswa(role, user_id):
     cur.execute("""
         SELECT p.id, u.nama AS nama_siswa, m.nama AS nama_mitra, pr.nama_periode, p.status_pendaftaran
         FROM pendaftaran_pkl p
-        JOIN users u ON p.user_id = u.id
+        JOIN users u ON p.siswa_id = u.id
         JOIN mitra_pkl m ON p.mitra_id = m.id
         JOIN periode_pkl pr ON p.periode_id = pr.id
         WHERE u.role = 'siswa' AND p.status_pendaftaran = 'belum disetujui'
@@ -524,22 +524,22 @@ def ajukan_pkl(role, user_id):
     print("\n=== AJUKAN PKL ===")
 
     # Tampilkan daftar periode aktif
-    cur.execute("SELECT id, nama_periode FROM periode_pkl WHERE status_aktif = 'aktif'")
+    cur.execute("SELECT id, nama_periode, tanggal_mulai, tanggal_selesai FROM periode_pkl WHERE status = 'aktif'")
     periode = cur.fetchall()
     if not periode:
         print("Tidak ada periode aktif.")
         return
 
     print("\n-- Periode PKL Aktif --")
-    print(tabulate(periode, headers=["ID", "Nama Periode"], tablefmt="grid"))
+    print(tabulate(periode, headers=["ID", "Nama Periode", "Mulai", "Selesai"], tablefmt="grid"))
 
     periode_id = input("Masukkan ID Periode: ")
 
     # Tampilkan daftar mitra
-    cur.execute("SELECT id, nama FROM mitra_pkl")
+    cur.execute("SELECT id, nama, alamat, kontak_person, kuota FROM mitra_pkl")
     mitra = cur.fetchall()
     print("\n-- Daftar Mitra PKL --")
-    print(tabulate(mitra, headers=["ID", "Nama Mitra"], tablefmt="grid"))
+    print(tabulate(mitra, headers=["ID", "Nama Mitra", "Alamat", "Kontak Person", "Kuota"], tablefmt="grid"))
 
     mitra_id = input("Masukkan ID Mitra PKL: ")
 
@@ -553,6 +553,29 @@ def ajukan_pkl(role, user_id):
         show_menu(role, user_id)
         return
 
+    # Cek kuota mitra
+    cur.execute("SELECT kuota FROM mitra_pkl WHERE id = %s", (mitra_id,))
+    kuota_row = cur.fetchone()
+    if not kuota_row:
+        print("Mitra tidak ditemukan.")
+        show_menu(role, user_id)
+        return
+
+    kuota = kuota_row[0]
+
+    # Hitung jumlah pendaftar di mitra tersebut dan periode tersebut
+    cur.execute("""
+        SELECT COUNT(*) FROM pendaftaran_pkl
+        WHERE mitra_id = %s AND periode_id = %s
+    """, (mitra_id, periode_id))
+    jumlah_pendaftar = cur.fetchone()[0]
+
+    if jumlah_pendaftar >= kuota:
+        print(f"Kuota untuk mitra ini sudah penuh. (Kuota: {kuota}, Pendaftar: {jumlah_pendaftar})")
+        show_menu(role, user_id)
+        return
+
+    # Simpan pendaftaran
     cur.execute("""
         INSERT INTO pendaftaran_pkl (user_id, periode_id, mitra_id, status_pendaftaran, tanggal_daftar)
         VALUES (%s, %s, %s, %s, %s)
@@ -577,7 +600,7 @@ def lihat_status_verifikasi(role, user_id):
         FROM pendaftaran_pkl p
         JOIN mitra_pkl m ON p.mitra_id = m.id
         JOIN periode_pkl per ON p.periode_id = per.id
-        WHERE p.user_id = %s
+        WHERE p.siswa_id = %s
         ORDER BY p.tanggal_daftar DESC
     """
     cur.execute(query, (user_id,))
@@ -607,7 +630,7 @@ def lihat_status_verifikasi(role, user_id):
         FROM pendaftaran_pkl p
         JOIN mitra_pkl m ON p.mitra_id = m.id
         JOIN periode_pkl per ON p.periode_id = per.id
-        WHERE p.id = %s AND p.user_id = %s
+        WHERE p.id = %s AND p.siswa_id = %s
     """
     cur.execute(detail_query, (id_pilihan, user_id))
     detail = cur.fetchone()
@@ -641,7 +664,7 @@ def cetak_surat(role, user_id):
         FROM pendaftaran_pkl p
         JOIN mitra_pkl m ON p.mitra_id = m.id
         JOIN periode_pkl per ON p.periode_id = per.id
-        WHERE p.user_id = %s
+        WHERE p.siswa_id = %s
         ORDER BY p.tanggal_daftar DESC
     """
     cur.execute(query, (user_id,))
@@ -667,10 +690,10 @@ def cetak_surat(role, user_id):
         SELECT u.nama, u.no_induk, m.nama, m.alamat, m.kontak_person, 
                per.nama_periode, per.tanggal_mulai, per.tanggal_selesai, p.id
         FROM pendaftaran_pkl p
-        JOIN users u ON p.user_id = u.id
+        JOIN users u ON p.siswa_id = u.id
         JOIN mitra_pkl m ON p.mitra_id = m.id
         JOIN periode_pkl per ON p.periode_id = per.id
-        WHERE p.id = %s AND p.user_id = %s
+        WHERE p.id = %s AND p.siswa_id = %s
     """
     cur.execute(detail_query, (id_pendaftaran, user_id))
     data = cur.fetchone()
@@ -733,7 +756,7 @@ def buat_laporan(role, user_id):
         FROM pendaftaran_pkl p
         JOIN mitra_pkl m ON p.mitra_id = m.id
         JOIN periode_pkl per ON p.periode_id = per.id
-        WHERE p.user_id = %s
+        WHERE p.siswa_id = %s
     """
     cur.execute(query_pkl, (user_id,))
     pkl_list = cur.fetchall()
@@ -753,7 +776,7 @@ def buat_laporan(role, user_id):
     try:
         pkl_id = int(input("Masukkan ID Pendaftaran PKL | [0] untuk batalkan: "))
         if pkl_id == 0:
-            return show_menu(role, user_id)  # ✅ kembali ke menu utama
+            return show_menu(role, user_id)
     except ValueError:
         print("ID tidak valid.")
         return buat_laporan(role, user_id)
@@ -761,7 +784,7 @@ def buat_laporan(role, user_id):
 
     # Tampilkan semua laporan sebelumnya
     query_laporan = """
-        SELECT id, tanggal, kegiatan, catatan
+        SELECT id, tanggal, kegiatan, catatan, nilai
         FROM laporan_pkl
         WHERE user_id = %s AND pendaftaran_pkl = %s
         ORDER BY tanggal DESC
@@ -771,11 +794,11 @@ def buat_laporan(role, user_id):
 
     if laporan_list:
         print("\n=== Laporan Sebelumnya ===")
-        print("+----+------------+------------------------------+----------------+")
-        print("| ID | Tanggal    | Kegiatan                     | Catatan        |")
-        print("+----+------------+------------------------------+----------------+")
+        print("+----+------------+------------------------------+----------------+---------+")
+        print("| ID | Tanggal    | Kegiatan                     | Catatan        | Nilai   |")
+        print("+----+------------+------------------------------+----------------+---------+")
         for lap in laporan_list:
-            print(f"| {str(lap[0]).ljust(2)} | {str(lap[1])} | {lap[2][:28].ljust(28)} | {lap[3][:14].ljust(14)} |")
+            print(f"| {str(lap[0]).ljust(2)} | {str(lap[1])} | {lap[2][:28].ljust(28)} | {lap[3][:14].ljust(14)} | {lap[4]} |")
         print("+----+------------+------------------------------+----------------+")
     else:
         print("Belum ada laporan untuk pendaftaran ini.")
@@ -796,7 +819,7 @@ def buat_laporan(role, user_id):
 
         try:
             query_insert = """
-                INSERT INTO laporan_pkl (user_id, tanggal, kegiatan, catatan, pendaftaran_pkl)
+                INSERT INTO laporan_pkl (siswa_id, tanggal, kegiatan, catatan, pendaftaran_pkl)
                 VALUES (%s, %s, %s, %s, %s)
             """
             cur.execute(query_insert, (user_id, tanggal, kegiatan, catatan, pkl_id))
@@ -869,7 +892,7 @@ def lihat_laporan(role, user_id):
         SELECT l.id, u.nama AS nama_siswa, m.nama AS nama_mitra, l.tanggal, l.kegiatan, l.nilai
         FROM laporan_pkl l
         JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id
-        JOIN users u ON p.user_id = u.id
+        JOIN users u ON p.siswa_id = u.id
         JOIN mitra_pkl m ON p.mitra_id = m.id
         WHERE p.guru_id = %s
         ORDER BY l.tanggal DESC
@@ -904,7 +927,7 @@ def lihat_laporan(role, user_id):
         SELECT l.id, u.nama, m.nama, l.tanggal, l.kegiatan, l.catatan, l.nilai
         FROM laporan_pkl l
         JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id
-        JOIN users u ON p.user_id = u.id
+        JOIN users u ON p.siswa_id = u.id
         JOIN mitra_pkl m ON p.mitra_id = m.id
         WHERE l.id = %s AND p.guru_id = %s
     """
@@ -957,7 +980,7 @@ def beri_nilai_akhir(role, user_id):
         p.id, u.nama, m.nama, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai,
         pn.nilai
         FROM pendaftaran_pkl p
-        JOIN users u ON p.user_id = u.id
+        JOIN users u ON p.siswa_id = u.id
         JOIN mitra_pkl m ON p.mitra_id = m.id
         JOIN periode_pkl per ON p.periode_id = per.id
         LEFT JOIN penilaian pn ON pn.siswa_id = p.id AND pn.guru_id = %s
@@ -994,7 +1017,7 @@ def beri_nilai_akhir(role, user_id):
         SELECT 
             p.id, u.nama, m.nama, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai
         FROM pendaftaran_pkl p
-        JOIN users u ON p.user_id = u.id
+        JOIN users u ON p.siswa_id = u.id
         JOIN mitra_pkl m ON p.mitra_id = m.id
         JOIN periode_pkl per ON p.periode_id = per.id
         WHERE p.id = %s AND p.guru_id = %s
