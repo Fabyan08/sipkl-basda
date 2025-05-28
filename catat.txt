@@ -9,3 +9,7 @@ INSERT INTO public.users(
 INSERT INTO public.users(
 	id, nama, email, password, kelas, no_hp, no_induk, role)
 	VALUES (3, 'guru', 'guru@gmail.com', 'guru123', null , 081234567890, '12172671223' , 'guru');
+
+udin@gmail.com udin
+budi@gmail.com budi
+admin@gmail.com admin
