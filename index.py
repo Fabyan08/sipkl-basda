@@ -5,8 +5,6 @@ from tabulate import tabulate
 from datetime import datetime
 from fpdf import FPDF
 
-# GANTI NAMA SESUAI DB BARU
-
 def koneksi_db():
     try:
         return psycopg2.connect(
@@ -519,15 +517,16 @@ def hapus_mitra():
         print("Mitra berhasil dihapus.")
 
 # Kelola Periode PKL
-def kelola_data_periode(role, user_id):
+from datetime import datetime
+
+def kelola_data_periode(role, user_id): 
     while True:
         conn = koneksi_db()
         cur = conn.cursor()
         cur.execute("""
-            SELECT p.id_periode, p.nama_periode, p.tanggal_mulai, p.tanggal_selesai, s.status
-            FROM periode_pkl p
-            JOIN status_periode s ON p.status = s.id
-            ORDER BY p.id
+            SELECT id_periode, nama_periode, tanggal_mulai, tanggal_selesai
+            FROM periode_pkl
+            ORDER BY id_periode
         """)
         data = cur.fetchall()
         cur.close()
@@ -535,7 +534,16 @@ def kelola_data_periode(role, user_id):
 
         print("\n=== KELOLA DATA PERIODE PKL ===")
         headers = ["ID", "Nama Periode", "Mulai", "Selesai", "Status"]
-        print(tabulate(data, headers=headers, tablefmt="grid"))
+        rows = []
+
+        today = datetime.now().date()
+        for d in data:
+            tgl_mulai = d[2]
+            tgl_selesai = d[3]
+            status = "Aktif" if tgl_mulai <= today <= tgl_selesai else "Tidak Aktif"
+            rows.append((d[0], d[1], str(tgl_mulai), str(tgl_selesai), status))
+
+        print(tabulate(rows, headers=headers, tablefmt="grid"))
 
         print("[1] Tambah Periode")
         print("[2] Edit Periode")
@@ -555,14 +563,6 @@ def kelola_data_periode(role, user_id):
         else:
             print("Pilihan tidak valid.")
             
-def get_status_options():
-    conn = koneksi_db()
-    cur = conn.cursor()
-    cur.execute("SELECT id_status_periode, status FROM status_periode")
-    status_list = cur.fetchall()
-    cur.close()
-    conn.close()
-    return status_list
 
 def tambah_periode():
     print("\n=== Tambah Periode PKL ===")
@@ -589,7 +589,7 @@ def edit_periode():
 
     conn = koneksi_db()
     cur = conn.cursor()
-    cur.execute("SELECT nama_periode, tanggal_mulai, tanggal_selesai, status FROM periode_pkl WHERE id_periode = %s", (id_edit,))
+    cur.execute("SELECT nama_periode, tanggal_mulai, tanggal_selesai FROM periode_pkl WHERE id_periode = %s", (id_edit,))
     data = cur.fetchone()
     if not data:
         print("Data tidak ditemukan.")
@@ -599,29 +599,15 @@ def edit_periode():
     mulai_baru = input(f"Tanggal Mulai Baru (kosongkan untuk tetap: {data[1]}): ")
     selesai_baru = input(f"Tanggal Selesai Baru (kosongkan untuk tetap: {data[2]}): ")
 
-    print("Status (kosongkan untuk tetap aktif atau ketik 'n' untuk tidak aktif.)")
-    if data[3] == 1:
-        data_status = 'aktif'
-    else:
-        data_status = 'tidak aktif'
-    status_input = input(f"Status (saat ini: {data_status}): ").lower().strip()
-    if status_input == 'n':
-        status_baru = '2'  # ID status 'tidak aktif'
-    elif status_input == '':
-        status_baru = data[3]  # Tetap seperti sebelumnya
-    else:
-        status_baru = status_input  # Gunakan input apa adanya (misal langsung input ID)
-
     nama = nama_baru if nama_baru else data[0]
     mulai = mulai_baru if mulai_baru else data[1]
     selesai = selesai_baru if selesai_baru else data[2]
-    status = status_baru
 
     cur.execute("""
         UPDATE periode_pkl
-        SET nama_periode = %s, tanggal_mulai = %s, tanggal_selesai = %s, status = %s
+        SET nama_periode = %s, tanggal_mulai = %s, tanggal_selesai = %s
         WHERE id_periode = %s
-    """, (nama, mulai, selesai, status, id_edit))
+    """, (nama, mulai, selesai, id_edit))
     conn.commit()
     cur.close()
     conn.close()
@@ -639,6 +625,7 @@ def hapus_periode():
     conn.close()
     print("Periode PKL berhasil dihapus.")
 
+# SAMPAI DI STATUS ----
 # Kelola verifikasi siswa
 def verifikasi_pengajuan_siswa(role, user_id):
     print("\n=== VERIFIKASI PENGAJUAN PKL ===")
@@ -677,7 +664,7 @@ def verifikasi_pengajuan_siswa(role, user_id):
         return show_menu(role, user_id)
 
     # Periksa apakah ID pengajuan valid
-    cur.execute("SELECT id FROM pendaftaran_pkl WHERE id_pendaftaran = %s AND status_pendaftaran = '1'", (id_pengajuan,))
+    cur.execute("SELECT id_pendaftaran FROM pendaftaran_pkl WHERE id_pendaftaran = %s AND status_pendaftaran = '1'", (id_pengajuan,))
     cek_pengajuan = cur.fetchone()
     if not cek_pengajuan:
         print("❌ ID pengajuan tidak ditemukan atau sudah disetujui.")
@@ -713,7 +700,7 @@ def verifikasi_pengajuan_siswa(role, user_id):
         cur.execute("""
             UPDATE pendaftaran_pkl 
             SET status_pendaftaran = 2, guru_id = %s 
-            WHERE id = %s
+            WHERE id_pendaftaran = %s
         """, (guru_id, id_pengajuan))
         conn.commit()
         print("✅ Pengajuan berhasil disetujui dan guru pembimbing ditetapkan.")
@@ -725,7 +712,6 @@ def verifikasi_pengajuan_siswa(role, user_id):
     show_menu(role, user_id)
 
 
-
 # ROLE SISWA
 def ajukan_pkl(role, user_id):
     conn = koneksi_db()
@@ -733,17 +719,35 @@ def ajukan_pkl(role, user_id):
 
     print("\n=== AJUKAN PKL ===")
 
-    # Tampilkan daftar periode aktif
-    cur.execute("SELECT id_periode, nama_periode, tanggal_mulai, tanggal_selesai FROM periode_pkl WHERE status = 1")
+    today = datetime.today().strftime('%Y-%m-%d')
+
+    # Ambil periode aktif berdasarkan tanggal
+    cur.execute("""
+        SELECT id_periode, nama_periode, tanggal_mulai, tanggal_selesai
+        FROM periode_pkl
+        WHERE %s BETWEEN tanggal_mulai AND tanggal_selesai
+    """, (today,))
     periode = cur.fetchall()
+    
     if not periode:
-        print("Tidak ada periode aktif.")
+        print("Tidak ada periode PKL yang aktif hari ini.")
+        cur.close()
+        conn.close()
         return
 
     print("\n-- Periode PKL Aktif --")
     print(tabulate(periode, headers=["ID", "Nama Periode", "Mulai", "Selesai"], tablefmt="grid"))
 
     periode_id = input("Masukkan ID Periode: ")
+
+    # Cek apakah siswa sudah pernah mendaftar di periode manapun
+    cur.execute("SELECT * FROM pendaftaran_pkl WHERE siswa_id = %s", (user_id,))
+    if cur.fetchone():
+        print("Kamu sudah pernah mengajukan PKL dan tidak bisa mengajukan lagi.")
+        cur.close()
+        conn.close()
+        show_menu(role, user_id)
+        return
 
     # Tampilkan daftar mitra
     cur.execute("SELECT id_mitra, nama_mitra, alamat_mitra, contact_person_mitra, kuota FROM mitra_pkl")
@@ -753,27 +757,22 @@ def ajukan_pkl(role, user_id):
 
     mitra_id = input("Masukkan ID Mitra PKL: ")
 
-    tanggal_daftar = datetime.today().strftime('%Y-%m-%d')
-    status_pendaftaran = 1  # diasumsikan sesuai ID di tabel status_pendaftaran
-
-    # Cek apakah siswa sudah pernah mengajukan
-    cur.execute("SELECT * FROM pendaftaran_pkl WHERE siswa_id = %s AND periode_id = %s", (user_id, periode_id))
-    if cur.fetchone():
-        print("Kamu sudah mengajukan PKL untuk periode ini.")
-        show_menu(role, user_id)
-        return
+    tanggal_daftar = today
+    status_pendaftaran = 1
 
     # Cek kuota mitra
     cur.execute("SELECT kuota FROM mitra_pkl WHERE id_mitra = %s", (mitra_id,))
     kuota_row = cur.fetchone()
     if not kuota_row:
         print("Mitra tidak ditemukan.")
+        cur.close()
+        conn.close()
         show_menu(role, user_id)
         return
 
     kuota = kuota_row[0]
 
-    # Hitung jumlah pendaftar di mitra tersebut dan periode tersebut
+    # Hitung jumlah pendaftar di mitra dan periode yang dipilih
     cur.execute("""
         SELECT COUNT(*) FROM pendaftaran_pkl
         WHERE mitra_id = %s AND periode_id = %s
@@ -782,10 +781,12 @@ def ajukan_pkl(role, user_id):
 
     if jumlah_pendaftar >= kuota:
         print(f"Kuota untuk mitra ini sudah penuh. (Kuota: {kuota}, Pendaftar: {jumlah_pendaftar})")
+        cur.close()
+        conn.close()
         show_menu(role, user_id)
         return
 
-    # Simpan pendaftaran
+    # Simpan data pendaftaran
     cur.execute("""
         INSERT INTO pendaftaran_pkl (siswa_id, periode_id, mitra_id, status_pendaftaran, tanggal_daftar, guru_id)
         VALUES (%s, %s, %s, %s, %s, NULL)
@@ -795,9 +796,8 @@ def ajukan_pkl(role, user_id):
     cur.close()
     conn.close()
     print("Pengajuan PKL berhasil dikirim.")
-    
+
     show_menu(role, user_id)
-    
 def lihat_status_verifikasi(role, user_id):
     conn = koneksi_db()
     cur = conn.cursor()
@@ -1265,7 +1265,6 @@ def beri_nilai_akhir(role, user_id):
     cur.execute(query, (user_id, user_id))
     siswa_list = cur.fetchall()
 
-
     if not siswa_list:
         print("Belum ada siswa bimbingan.")
         input("\nTekan Enter untuk kembali...")
@@ -1330,7 +1329,7 @@ def beri_nilai_akhir(role, user_id):
     catatan = input("Masukkan catatan evaluasi (opsional): ").strip()
 
     # Cek apakah penilaian sudah ada
-    cur.execute("SELECT id FROM penilaian WHERE siswa_id = %s AND guru_id = %s", (siswa_id, user_id))
+    cur.execute("SELECT id_penilaian FROM penilaian WHERE siswa_id = %s AND guru_id = %s", (siswa_id, user_id))
     existing = cur.fetchone()
 
     try:
