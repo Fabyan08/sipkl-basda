@@ -89,24 +89,12 @@ def login():
 
     if akun == '1':
         table = 'admin'
-        email_field = 'email_admin'
-        password_field = 'password_admin'
-        id_field = 'id_admin'
-        name_field = 'nama_admin'
         role = 1
     elif akun == '2':
         table = 'guru'
-        email_field = 'email_guru'
-        password_field = 'password_guru'
-        id_field = 'id_guru'
-        name_field = 'nama_guru'
         role = 2
     elif akun == '3':
         table = 'siswa'
-        email_field = 'email_siswa'
-        password_field = 'password_siswa'
-        id_field = 'id_siswa'
-        name_field = 'nama_siswa'
         role = 3
     else:
         print("Pilihan tidak valid.")
@@ -116,8 +104,7 @@ def login():
     password = input("Password: ").strip()
 
     try:
-        query = f"SELECT {id_field}, {name_field}, {password_field} FROM {table} WHERE {email_field} = %s"
-        cursor.execute(query, (email,))
+        cursor.execute(f"SELECT id, nama, password FROM {table} WHERE email = %s", (email,))
         user = cursor.fetchone()
 
         if user and user[2] == hash_password(password):
@@ -130,7 +117,6 @@ def login():
     finally:
         cursor.close()
         conn.close()
-
 
 
 def show_menu(role, user_id):
@@ -208,13 +194,13 @@ def tampilkan_users(role):
     cur = conn.cursor()
 
     if role == 'siswa':
-        query = "SELECT id_siswa, nama_siswa, email_siswa, no_hp_siswa, kelas_siswa FROM siswa ORDER BY id_siswa"
+        query = "SELECT id, nama, email, no_hp, kelas FROM siswa ORDER BY id"
         headers = ["ID", "Nama", "Email", "No HP", "Kelas"]
     elif role == 'guru':
-        query = "SELECT id_guru, nama_guru, email_guru, no_hp_guru, nip FROM guru ORDER BY id_guru"
+        query = "SELECT id, nama, email, no_hp, nip FROM guru ORDER BY id"
         headers = ["ID", "Nama", "Email", "No HP", "nip"]
     elif role == 'admin':
-        query = "SELECT id_admin, nama_admin, email_admin, no_hp_admin FROM admin ORDER BY id_admin"
+        query = "SELECT id, nama, email, no_hp FROM admin ORDER BY id"
         headers = ["ID", "Nama", "Email", "No HP"]
     else:
         print("Role tidak dikenali.")
@@ -282,6 +268,19 @@ def kelola_data_siswa(role, user_id):
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
+def get_role_id(role_name):
+    conn = koneksi_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM role WHERE role = %s", (role_name,))
+    result = cur.fetchone()
+    cur.close()
+    conn.close()
+    if result:
+        return result[0]
+    else:
+        print(f"Role '{role_name}' tidak ditemukan.")
+        return None
+
 def tambah_user(role):
     if role not in ['admin', 'guru', 'siswa']:
         print("Role tidak dikenali.")
@@ -300,13 +299,13 @@ def tambah_user(role):
     try:
         if role == 'siswa':
             query = """
-                INSERT INTO siswa (nama_siswa, email_siswa, password_siswa, kelas_siswa, no_hp_siswa, nisn)
+                INSERT INTO siswa (nama, email, password, kelas, no_hp, nisn)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """
             params = (nama, email, hash_password(password), kelas, no_hp, no_induk)
         elif role == 'guru':
             query = """
-                INSERT INTO guru (nama_guru, email_guru, password_guru, no_hp_guru, nip)
+                INSERT INTO guru (nama, email, password, no_hp, nip)
                 VALUES (%s, %s, %s, %s, %s)
             """
             params = (nama, email, hash_password(password), no_hp, no_induk)
@@ -331,41 +330,16 @@ def edit_user(role):
     cur = conn.cursor()
 
     try:
-        if role == 'admin':
-            id_col = 'id_admin'
-            nama_col = 'nama_admin'
-            email_col = 'email_admin'
-            no_hp_col = 'no_hp_admin'
-        elif role == 'guru':
-            id_col = 'id_guru'
-            nama_col = 'nama_guru'
-            email_col = 'email_guru'
-            no_hp_col = 'no_hp_guru'
-        elif role == 'siswa':
-            id_col = 'id_siswa'
-            nama_col = 'nama_siswa'
-            email_col = 'email_siswa'
-            no_hp_col = 'no_hp_siswa'
-            kelas_col = 'kelas_siswa'
-
         # Ambil data lama
         if role == 'siswa':
-            cur.execute(f"""
-                SELECT {nama_col}, {email_col}, {no_hp_col}, {kelas_col}
-                FROM {role}
-                WHERE {id_col} = %s
-            """, (user_id,))
+            cur.execute("SELECT nama, email, no_hp, kelas FROM siswa WHERE id = %s", (user_id,))
             user = cur.fetchone()
             if not user:
                 print("Siswa tidak ditemukan.")
                 return
             nama_lama, email_lama, no_hp_lama, kelas_lama = user
         else:
-            cur.execute(f"""
-                SELECT {nama_col}, {email_col}, {no_hp_col}
-                FROM {role}
-                WHERE {id_col} = %s
-            """, (user_id,))
+            cur.execute(f"SELECT nama, email, no_hp FROM {role} WHERE id = %s", (user_id,))
             user = cur.fetchone()
             if not user:
                 print(f"{role.capitalize()} tidak ditemukan.")
@@ -375,20 +349,14 @@ def edit_user(role):
         nama_baru = input("Nama baru: ").strip() or nama_lama
         email_baru = input("Email baru: ").strip() or email_lama
         no_hp_baru = input("No HP baru: ").strip() or no_hp_lama
-
-        #  update
         if role == 'siswa':
             kelas_baru = input("Kelas baru: ").strip() or kelas_lama
-            cur.execute(f"""
-                UPDATE {role}
-                SET {nama_col} = %s, {email_col} = %s, {no_hp_col} = %s, {kelas_col} = %s
-                WHERE {id_col} = %s
+            cur.execute("""
+                UPDATE siswa SET nama = %s, email = %s, no_hp = %s, kelas = %s WHERE id = %s
             """, (nama_baru, email_baru, no_hp_baru, kelas_baru, user_id))
         else:
             cur.execute(f"""
-                UPDATE {role}
-                SET {nama_col} = %s, {email_col} = %s, {no_hp_col} = %s
-                WHERE {id_col} = %s
+                UPDATE {role} SET nama = %s, email = %s, no_hp = %s WHERE id = %s
             """, (nama_baru, email_baru, no_hp_baru, user_id))
 
         conn.commit()
@@ -398,7 +366,6 @@ def edit_user(role):
     finally:
         cur.close()
         conn.close()
-
 
 def hapus_user(role):
     if role not in ['admin', 'guru', 'siswa']:
@@ -411,25 +378,15 @@ def hapus_user(role):
     cur = conn.cursor()
 
     try:
-        # Tentukan kolom ID berdasarkan role
-        if role == 'admin':
-            id_col = 'id_admin'
-        elif role == 'guru':
-            id_col = 'id_guru'
-        elif role == 'siswa':
-            id_col = 'id_siswa'
-
-        # Cek apakah user ada
-        cur.execute(f"SELECT {id_col} FROM {role} WHERE {id_col} = %s", (user_id,))
+        cur.execute(f"SELECT id FROM {role} WHERE id = %s", (user_id,))
         user = cur.fetchone()
         if not user:
             print(f"{role.capitalize()} dengan ID tersebut tidak ditemukan.")
             return
 
-        # Konfirmasi hapus
         confirm = input(f"Apakah Anda yakin ingin menghapus {role} dengan ID {user_id}? (y/n): ").lower()
         if confirm == 'y':
-            cur.execute(f"DELETE FROM {role} WHERE {id_col} = %s", (user_id,))
+            cur.execute(f"DELETE FROM {role} WHERE id = %s", (user_id,))
             conn.commit()
             print(f"{role.capitalize()} berhasil dihapus.")
         else:
@@ -439,7 +396,6 @@ def hapus_user(role):
     finally:
         cur.close()
         conn.close()
-
 
 
 # Kelola mitra
@@ -469,7 +425,7 @@ def kelola_data_mitra(role, user_id):
 
 def ambil_data_mitra():
     cur = koneksi_db().cursor()
-    cur.execute("SELECT id_mitra, nama_mitra, alamat_mitra, contact_person_mitra FROM mitra_pkl ORDER BY id_mitra")
+    cur.execute("SELECT id, nama, alamat, kontak_person FROM mitra_pkl ORDER BY id")
     return cur.fetchall()
 
 def tambah_mitra():
@@ -478,7 +434,7 @@ def tambah_mitra():
     alamat = input("Alamat: ")
     kontak = input("Kontak Person: ")
 
-    cur.execute("INSERT INTO mitra_pkl (nama_mitra, alamat_mitra, contact_person_mitra) VALUES (%s, %s, %s)", 
+    cur.execute("INSERT INTO mitra_pkl (nama, alamat, kontak_person) VALUES (%s, %s, %s)", 
                 (nama, alamat, kontak))
     conn.commit()
     print("Mitra PKL berhasil ditambahkan.")
@@ -486,7 +442,7 @@ def tambah_mitra():
 def edit_mitra():
     id_mitra = input("ID mitra yang ingin diedit: ")
 
-    cur.execute("SELECT * FROM mitra_pkl WHERE id_mitra = %s", (id_mitra,))
+    cur.execute("SELECT * FROM mitra_pkl WHERE id = %s", (id_mitra,))
     mitra = cur.fetchone()
     if not mitra:
         print("Mitra tidak ditemukan.")
@@ -498,15 +454,15 @@ def edit_mitra():
 
     cur.execute("""
         UPDATE mitra_pkl 
-        SET nama_mitra = %s, alamat_mitra = %s, contact_person_mitra = %s 
-        WHERE id_mitra = %s
+        SET nama = %s, alamat = %s, kontak_person = %s 
+        WHERE id = %s
     """, (nama_baru, alamat_baru, kontak_baru, id_mitra))
     conn.commit()
     print("Mitra berhasil diedit.")
 
 def hapus_mitra():
     id_mitra = input("ID mitra yang ingin dihapus: ")
-    cur.execute("SELECT * FROM mitra_pkl WHERE id_mitra = %s", (id_mitra,))
+    cur.execute("SELECT * FROM mitra_pkl WHERE id = %s", (id_mitra,))
     mitra = cur.fetchone()
     if not mitra:
         print("Mitra tidak ditemukan.") 
@@ -514,7 +470,7 @@ def hapus_mitra():
 
     konfirmasi = input(f"Yakin ingin menghapus mitra '{mitra[1]}'? (y/n): ")
     if konfirmasi.lower() == 'y':
-        cur.execute("DELETE FROM mitra_pkl WHERE id_mitra = %s", (id_mitra,))
+        cur.execute("DELETE FROM mitra_pkl WHERE id = %s", (id_mitra,))
         conn.commit()
         print("Mitra berhasil dihapus.")
 
@@ -524,7 +480,7 @@ def kelola_data_periode(role, user_id):
         conn = koneksi_db()
         cur = conn.cursor()
         cur.execute("""
-            SELECT p.id_periode, p.nama_periode, p.tanggal_mulai, p.tanggal_selesai, s.status
+            SELECT p.id, p.nama_periode, p.tanggal_mulai, p.tanggal_selesai, s.status
             FROM periode_pkl p
             JOIN status_periode s ON p.status = s.id
             ORDER BY p.id
@@ -558,7 +514,7 @@ def kelola_data_periode(role, user_id):
 def get_status_options():
     conn = koneksi_db()
     cur = conn.cursor()
-    cur.execute("SELECT id_status_periode, status FROM status_periode")
+    cur.execute("SELECT id, status FROM status_periode")
     status_list = cur.fetchall()
     cur.close()
     conn.close()
@@ -589,7 +545,7 @@ def edit_periode():
 
     conn = koneksi_db()
     cur = conn.cursor()
-    cur.execute("SELECT nama_periode, tanggal_mulai, tanggal_selesai, status FROM periode_pkl WHERE id_periode = %s", (id_edit,))
+    cur.execute("SELECT nama_periode, tanggal_mulai, tanggal_selesai, status FROM periode_pkl WHERE id = %s", (id_edit,))
     data = cur.fetchone()
     if not data:
         print("Data tidak ditemukan.")
@@ -599,6 +555,9 @@ def edit_periode():
     mulai_baru = input(f"Tanggal Mulai Baru (kosongkan untuk tetap: {data[1]}): ")
     selesai_baru = input(f"Tanggal Selesai Baru (kosongkan untuk tetap: {data[2]}): ")
 
+    # data_status = cur.execute("SELECT nama_periode, tanggal_mulai, tanggal_selesai, status FROM periode_pkl WHERE id = %s", (id_edit,))
+
+    # Penyesuaian untuk status
     print("Status (kosongkan untuk tetap aktif atau ketik 'n' untuk tidak aktif.)")
     if data[3] == 1:
         data_status = 'aktif'
@@ -620,7 +579,7 @@ def edit_periode():
     cur.execute("""
         UPDATE periode_pkl
         SET nama_periode = %s, tanggal_mulai = %s, tanggal_selesai = %s, status = %s
-        WHERE id_periode = %s
+        WHERE id = %s
     """, (nama, mulai, selesai, status, id_edit))
     conn.commit()
     cur.close()
@@ -633,7 +592,7 @@ def hapus_periode():
 
     conn = koneksi_db()
     cur = conn.cursor()
-    cur.execute("DELETE FROM periode_pkl WHERE id_periode = %s", (id_hapus,))
+    cur.execute("DELETE FROM periode_pkl WHERE id = %s", (id_hapus,))
     conn.commit()
     cur.close()
     conn.close()
@@ -648,11 +607,11 @@ def verifikasi_pengajuan_siswa(role, user_id):
 
     # Ambil data pengajuan yang masih menunggu persetujuan
     cur.execute("""
-        SELECT p.id_pendaftaran, s.nama_siswa AS nama_siswa, m.nama_mitra AS nama_mitra, pr.nama_periode, p.status_pendaftaran
+        SELECT p.id, s.nama AS nama_siswa, m.nama AS nama_mitra, pr.nama_periode, p.status_pendaftaran
         FROM pendaftaran_pkl p
-        JOIN siswa s ON p.siswa_id = s.id_siswa
-        JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
-        JOIN periode_pkl pr ON p.periode_id = pr.id_periode
+        JOIN siswa s ON p.siswa_id = s.id
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl pr ON p.periode_id = pr.id
         WHERE p.status_pendaftaran = '1'
     """)
 
@@ -677,14 +636,14 @@ def verifikasi_pengajuan_siswa(role, user_id):
         return show_menu(role, user_id)
 
     # Periksa apakah ID pengajuan valid
-    cur.execute("SELECT id FROM pendaftaran_pkl WHERE id_pendaftaran = %s AND status_pendaftaran = '1'", (id_pengajuan,))
+    cur.execute("SELECT id FROM pendaftaran_pkl WHERE id = %s AND status_pendaftaran = '1'", (id_pengajuan,))
     cek_pengajuan = cur.fetchone()
     if not cek_pengajuan:
         print("❌ ID pengajuan tidak ditemukan atau sudah disetujui.")
         return show_menu(role, user_id)
 
     # Tampilkan daftar guru pembimbing dari tabel guru
-    cur.execute("SELECT id_guru, nama_guru FROM guru")
+    cur.execute("SELECT id, nama FROM guru")
     daftar_guru = cur.fetchall()
 
     if not daftar_guru:
@@ -702,7 +661,7 @@ def verifikasi_pengajuan_siswa(role, user_id):
         return show_menu(role, user_id)
 
     # Periksa apakah guru tersedia
-    cur.execute("SELECT id_guru FROM guru WHERE id_guru = %s", (guru_id,))
+    cur.execute("SELECT id FROM guru WHERE id = %s", (guru_id,))
     cek_guru = cur.fetchone()
     if not cek_guru:
         print("❌ Guru dengan ID tersebut tidak ditemukan.")
@@ -734,7 +693,7 @@ def ajukan_pkl(role, user_id):
     print("\n=== AJUKAN PKL ===")
 
     # Tampilkan daftar periode aktif
-    cur.execute("SELECT id_periode, nama_periode, tanggal_mulai, tanggal_selesai FROM periode_pkl WHERE status = 1")
+    cur.execute("SELECT id, nama_periode, tanggal_mulai, tanggal_selesai FROM periode_pkl WHERE status = 1")
     periode = cur.fetchall()
     if not periode:
         print("Tidak ada periode aktif.")
@@ -746,7 +705,7 @@ def ajukan_pkl(role, user_id):
     periode_id = input("Masukkan ID Periode: ")
 
     # Tampilkan daftar mitra
-    cur.execute("SELECT id_mitra, nama_mitra, alamat_mitra, contact_person_mitra, kuota FROM mitra_pkl")
+    cur.execute("SELECT id, nama, alamat, kontak_person, kuota FROM mitra_pkl")
     mitra = cur.fetchall()
     print("\n-- Daftar Mitra PKL --")
     print(tabulate(mitra, headers=["ID", "Nama Mitra", "Alamat", "Kontak Person", "Kuota"], tablefmt="grid"))
@@ -764,7 +723,7 @@ def ajukan_pkl(role, user_id):
         return
 
     # Cek kuota mitra
-    cur.execute("SELECT kuota FROM mitra_pkl WHERE id_mitra = %s", (mitra_id,))
+    cur.execute("SELECT kuota FROM mitra_pkl WHERE id = %s", (mitra_id,))
     kuota_row = cur.fetchone()
     if not kuota_row:
         print("Mitra tidak ditemukan.")
@@ -806,10 +765,10 @@ def lihat_status_verifikasi(role, user_id):
 
     # Ambil semua data pendaftaran berdasarkan user
     query = """
-        SELECT p.id_pendaftaran, per.nama_periode, m.nama_mitra AS nama_mitra, p.status_pendaftaran, p.tanggal_daftar
+        SELECT p.id, per.nama_periode, m.nama AS nama_mitra, p.status_pendaftaran, p.tanggal_daftar
         FROM pendaftaran_pkl p
-        JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
-        JOIN periode_pkl per ON p.periode_id = per.id_periode
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
         WHERE p.siswa_id = %s
         ORDER BY p.tanggal_daftar DESC
     """
@@ -840,13 +799,13 @@ def lihat_status_verifikasi(role, user_id):
 
     # Ambil data detail berdasarkan ID pilihan
     detail_query = """
-        SELECT p.id_pendaftaran, m.nama_mitra, m.alamat_mitra, m.contact_person_mitra,
+        SELECT p.id, m.nama, m.alamat, m.kontak_person,
                per.nama_periode, per.tanggal_mulai, per.tanggal_selesai,
                p.status_pendaftaran, p.tanggal_daftar
         FROM pendaftaran_pkl p
-        JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
-        JOIN periode_pkl per ON p.periode_id = per.id_periode
-        WHERE p.id_pendaftaran = %s AND p.siswa_id = %s
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
+        WHERE p.id = %s AND p.siswa_id = %s
     """
     cur.execute(detail_query, (id_pilihan, user_id))
     detail = cur.fetchone()
@@ -877,10 +836,10 @@ def cetak_surat(role, user_id):
 
     # Ambil semua pendaftaran user
     query = """
-        SELECT p.id_pendaftaran, per.nama_periode, m.nama_mitra AS nama_mitra, p.status_pendaftaran
+        SELECT p.id, per.nama_periode, m.nama AS nama_mitra, p.status_pendaftaran
         FROM pendaftaran_pkl p
-        JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
-        JOIN periode_pkl per ON p.periode_id = per.id_periode
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
         WHERE p.siswa_id = %s
         ORDER BY p.tanggal_daftar DESC
     """
@@ -905,13 +864,13 @@ def cetak_surat(role, user_id):
 
     # Ambil data detail untuk surat, termasuk status
     detail_query = """
-        SELECT u.nama_siswa, u.nisn, m.nama_mitra, m.alamat_mitra, m.contact_person_mitra, 
-               per.nama_periode, per.tanggal_mulai, per.tanggal_selesai, p.id_pendaftaran, p.status_pendaftaran
+        SELECT u.nama, u.nisn, m.nama, m.alamat, m.kontak_person, 
+               per.nama_periode, per.tanggal_mulai, per.tanggal_selesai, p.id, p.status_pendaftaran
         FROM pendaftaran_pkl p
-        JOIN siswa u ON p.siswa_id = u.id_siswa
-        JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
-        JOIN periode_pkl per ON p.periode_id = per.id_periode
-        WHERE p.id_pendaftaran = %s AND p.siswa_id = %s
+        JOIN siswa u ON p.siswa_id = u.id
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
+        WHERE p.id = %s AND p.siswa_id = %s
     """
     cur.execute(detail_query, (id_pendaftaran, user_id))
     data = cur.fetchone()
@@ -980,10 +939,10 @@ def buat_laporan(role, user_id):
 
     # Tampilkan daftar pendaftaran PKL siswa
     query_pkl = """
-        SELECT p.id_pendaftaran, m.nama_mitra, per.nama_periode, p.status_pendaftaran
+        SELECT p.id, m.nama, per.nama_periode, p.status_pendaftaran
         FROM pendaftaran_pkl p
-        JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
-        JOIN periode_pkl per ON p.periode_id = per.id_periode
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
         WHERE p.siswa_id = %s
     """
     cur.execute(query_pkl, (user_id,))
@@ -1010,7 +969,7 @@ def buat_laporan(role, user_id):
         return buat_laporan(role, user_id)
 
     # Cek apakah pendaftaran sudah disetujui
-    cur.execute("SELECT status_pendaftaran FROM pendaftaran_pkl WHERE id_pendaftaran = %s AND siswa_id = %s", (pkl_id, user_id))
+    cur.execute("SELECT status_pendaftaran FROM pendaftaran_pkl WHERE id = %s AND siswa_id = %s", (pkl_id, user_id))
     status = cur.fetchone()
     if not status:
         print("❌ Pendaftaran tidak ditemukan.")
@@ -1022,7 +981,7 @@ def buat_laporan(role, user_id):
 
     # Tampilkan semua laporan sebelumnya
     query_laporan = """
-        SELECT id_laporan, tanggal, kegiatan, catatan, nilai_laporan
+        SELECT id, tanggal, kegiatan, catatan, nilai
         FROM laporan_pkl
         WHERE siswa_id = %s AND pendaftaran_pkl = %s
         ORDER BY tanggal DESC
@@ -1071,7 +1030,7 @@ def buat_laporan(role, user_id):
     elif aksi == '2':
         try:
             edit_id = int(input("Masukkan ID laporan yang ingin diedit: "))
-            cur.execute("SELECT tanggal, kegiatan, catatan FROM laporan_pkl WHERE id_laporan = %s AND siswa_id = %s", (edit_id, user_id))
+            cur.execute("SELECT tanggal, kegiatan, catatan FROM laporan_pkl WHERE id = %s AND siswa_id = %s", (edit_id, user_id))
             existing = cur.fetchone()
 
             if not existing:
@@ -1087,7 +1046,7 @@ def buat_laporan(role, user_id):
             query_update = """
                 UPDATE laporan_pkl
                 SET tanggal = %s, kegiatan = %s, catatan = %s
-                WHERE id_laporan = %s AND siswa_id = %s
+                WHERE id = %s AND siswa_id = %s
             """
             cur.execute(query_update, (tanggal, kegiatan, catatan, edit_id, user_id))
             conn.commit()
@@ -1101,7 +1060,7 @@ def buat_laporan(role, user_id):
     elif aksi == '3':
         try:
             del_id = int(input("Masukkan ID laporan yang ingin dihapus: "))
-            query_delete = "DELETE FROM laporan_pkl WHERE id_laporan = %s AND siswa_id = %s"
+            query_delete = "DELETE FROM laporan_pkl WHERE id = %s AND siswa_id = %s"
             cur.execute(query_delete, (del_id, user_id))
             conn.commit()
             print("✅ Laporan berhasil dihapus.\n")
@@ -1125,9 +1084,9 @@ def lihat_nilai_akhir(user_id):
 
     try:
         cursor.execute("""
-            SELECT g.nama_guru AS nama_guru, p.nilai_akhir, p.catatan_evaluasi
+            SELECT g.nama AS nama_guru, p.nilai, p.catatan_evaluasi
             FROM penilaian p
-            JOIN guru g ON p.guru_id = g.id_guru
+            JOIN guru g ON p.guru_id = g.id
             WHERE p.siswa_id = %s
         """, (user_id,))
         
@@ -1165,11 +1124,11 @@ def lihat_laporan(role, user_id):
     print("\n=== DAFTAR LAPORAN SISWA BIMBINGAN ===")
 
     query = """
-        SELECT l.id_laporan, u.nama_siswa AS nama_siswa, m.nama_mitra AS nama_mitra, l.tanggal, l.kegiatan, l.nilai_laporan
+        SELECT l.id, u.nama AS nama_siswa, m.nama AS nama_mitra, l.tanggal, l.kegiatan, l.nilai
         FROM laporan_pkl l
-        JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id_pendaftaran
-        JOIN siswa u ON p.siswa_id = u.id_siswa
-        JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
+        JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id
+        JOIN siswa u ON p.siswa_id = u.id
+        JOIN mitra_pkl m ON p.mitra_id = m.id
         WHERE p.guru_id = %s
         ORDER BY l.tanggal DESC
     """
@@ -1200,12 +1159,12 @@ def lihat_laporan(role, user_id):
 
    # Ambil detail laporan
     detail_query = """
-        SELECT l.id_laporan, u.nama_siswa, m.nama_mitra, l.tanggal, l.kegiatan, l.catatan, l.nilai_laporan
+        SELECT l.id, u.nama, m.nama, l.tanggal, l.kegiatan, l.catatan, l.nilai
         FROM laporan_pkl l
-        JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id_pendaftaran
-        JOIN siswa u ON p.siswa_id = u.id_siswa
-        JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
-        WHERE l.id_laporan = %s AND p.guru_id = %s
+        JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id
+        JOIN siswa u ON p.siswa_id = u.id
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        WHERE l.id = %s AND p.guru_id = %s
     """
     cur.execute(detail_query, (laporan_id, user_id))
     detail = cur.fetchone()
@@ -1230,7 +1189,7 @@ def lihat_laporan(role, user_id):
                 try:
                     nilai_baru_int = int(nilai_baru)
                     if 0 <= nilai_baru_int <= 100:
-                        cur.execute("UPDATE laporan_pkl SET nilai_laporan = %s WHERE id_laporan = %s", (nilai_baru_int, laporan_id))
+                        cur.execute("UPDATE laporan_pkl SET nilai = %s WHERE id = %s", (nilai_baru_int, laporan_id))
                         conn.commit()
                         print("✅ Nilai berhasil disimpan.")
                     else:
@@ -1253,13 +1212,13 @@ def beri_nilai_akhir(role, user_id):
     # 1. Tampilkan daftar siswa yang dibimbing
     query = """
         SELECT 
-        p.id_pendaftaran, u.nama_siswa, m.nama_mitra, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai,
-        pn.nilai_akhir
+        p.id, u.nama, m.nama, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai,
+        pn.nilai
         FROM pendaftaran_pkl p
-        JOIN siswa u ON p.siswa_id = u.id_siswa
-        JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
-        JOIN periode_pkl per ON p.periode_id = per.id_periode
-        LEFT JOIN penilaian pn ON pn.siswa_id = p.id_pendaftaran AND pn.guru_id = %s
+        JOIN siswa u ON p.siswa_id = u.id
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
+        LEFT JOIN penilaian pn ON pn.siswa_id = p.id AND pn.guru_id = %s
         WHERE p.guru_id = %s
     """
     cur.execute(query, (user_id, user_id))
@@ -1291,12 +1250,12 @@ def beri_nilai_akhir(role, user_id):
     # Pastikan siswa adalah bimbingan user
     cur.execute("""
         SELECT 
-            p.id_pendaftaran, u.nama_siswa, m.nama_mitra, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai
+            p.id, u.nama, m.nama, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai
         FROM pendaftaran_pkl p
-        JOIN siswa u ON p.siswa_id = u.id_siswa
-        JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
-        JOIN periode_pkl per ON p.periode_id = per.id_periode
-        WHERE p.id_pendaftaran = %s AND p.guru_id = %s
+        JOIN siswa u ON p.siswa_id = u.id
+        JOIN mitra_pkl m ON p.mitra_id = m.id
+        JOIN periode_pkl per ON p.periode_id = per.id
+        WHERE p.id = %s AND p.guru_id = %s
     """, (siswa_id, user_id))
     siswa = cur.fetchone()
 
@@ -1336,12 +1295,12 @@ def beri_nilai_akhir(role, user_id):
     try:
         if existing:
             cur.execute("""
-                UPDATE penilaian SET nilai_akhir = %s, catatan_evaluasi = %s WHERE id_penilaian = %s
+                UPDATE penilaian SET nilai = %s, catatan_evaluasi = %s WHERE id = %s
             """, (nilai, catatan, existing[0]))
             print("✅ Penilaian berhasil diperbarui.")
         else:
             cur.execute("""
-                INSERT INTO penilaian (siswa_id, guru_id, nilai_akhir, catatan_evaluasi)
+                INSERT INTO penilaian (siswa_id, guru_id, nilai, catatan_evaluasi)
                 VALUES (%s, %s, %s, %s)
             """, (siswa_id, user_id, nilai, catatan))
             print("✅ Penilaian berhasil disimpan.")
@@ -1359,32 +1318,21 @@ def show_profile(role, user_id):
     cursor = conn.cursor()
 
     try:
+        # Tentukan nama tabel berdasarkan role
         if role == 1:  # Admin
             table = "admin"
-            kolom_id = "id_admin"
-            kolom_nama = "nama_admin"
-            kolom_email = "email_admin"
-            kolom_nohp = "no_hp_admin"
+            fields = ("ID", "Nama", "Email", "-", "No HP", "-", "Role")
         elif role == 2:  # Guru
             table = "guru"
-            kolom_id = "id_guru"
-            kolom_nama = "nama_guru"
-            kolom_email = "email_guru"
-            kolom_nohp = "no_hp_guru"
-            kolom_nip = "nip"
+            fields = ("ID", "Nama", "Email", "-", "No HP", "NIP", "Guru")
         elif role == 3:  # Siswa
             table = "siswa"
-            kolom_id = "id_siswa"
-            kolom_nama = "nama_siswa"
-            kolom_email = "email_siswa"
-            kolom_kelas = "kelas_siswa"
-            kolom_nohp = "no_hp_siswa"
-            kolom_nisn = "nisn"
+            fields = ("ID", "Nama", "Email", "Kelas", "No HP", "NISN", "Siswa")
         else:
             print("❌ Role tidak dikenali.")
             return
 
-        cursor.execute(f"SELECT * FROM {table} WHERE {kolom_id} = %s", (user_id,))
+        cursor.execute(f"SELECT * FROM {table} WHERE id = %s", (user_id,))
         user = cursor.fetchone()
 
         if not user:
@@ -1395,16 +1343,13 @@ def show_profile(role, user_id):
         print(f"ID        : {user[0]}")
         print(f"Nama      : {user[1]}")
         print(f"Email     : {user[2]}")
-
         if role == 3:
-            print(f"Kelas     : {user[3]}")
-            print(f"No HP     : {user[4]}")
-            print(f"NISN      : {user[5]}")
+            print(f"Kelas     : {user[4]}")
+            print(f"No HP     : {user[5]}")
+            print(f"NISN      : {user[6]}")
         elif role == 2:
-            print(f"NIP       : {user[3]}")
-            print(f"No HP     : {user[4]}")
-        elif role == 1:
-            print(f"No HP     : {user[3]}")
+            print(f"No HP     : {user[5]}")
+            print(f"NIP       : {user[4]}")
 
         print("\nPilih data yang ingin diubah:")
         print("[1] Nama")
@@ -1416,31 +1361,27 @@ def show_profile(role, user_id):
         elif role == 2:
             print("[3] NIP")
             print("[4] No HP")
-        elif role == 1:
-            print("[3] No HP")
         print("[0] Kembali")
 
         pilihan = input("Pilihan: ")
         kolom = None
 
         if pilihan == '1':
-            kolom = kolom_nama
+            kolom = "nama"
         elif pilihan == '2':
-            kolom = kolom_email
+            kolom = "email"
         elif role == 3:
             if pilihan == '3':
-                kolom = kolom_kelas
+                kolom = "kelas"
             elif pilihan == '4':
-                kolom = kolom_nohp
+                kolom = "no_hp"
             elif pilihan == '5':
-                kolom = kolom_nisn
+                kolom = "nisn"
         elif role == 2:
             if pilihan == '3':
-                kolom = kolom_nip
+                kolom = "nip"
             elif pilihan == '4':
-                kolom = kolom_nohp
-        elif role == 1 and pilihan == '3':
-            kolom = kolom_nohp
+                kolom = "no_hp"
         elif pilihan == '0':
             return show_menu(role, user_id)
         else:
@@ -1449,7 +1390,7 @@ def show_profile(role, user_id):
 
         if kolom:
             nilai_baru = input(f"Masukkan {kolom} baru: ")
-            cursor.execute(f"UPDATE {table} SET {kolom} = %s WHERE {kolom_id} = %s", (nilai_baru, user_id))
+            cursor.execute(f"UPDATE {table} SET {kolom} = %s WHERE id = %s", (nilai_baru, user_id))
             conn.commit()
             print(f"✅ {kolom} berhasil diperbarui.")
 
