@@ -15,8 +15,6 @@ def koneksi_db():
         print("Gagal koneksi ke database:", e)
         return None
     
-conn = koneksi_db()       
-cur = conn.cursor() 
 
 def is_valid_email(email):
     return re.match(r"[^@]+@[^@]+\.[^@]+", email)
@@ -25,7 +23,8 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def register():
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor() 
     print("\n=== REGISTRASI ===")
 
     nama = input("Nama: ")
@@ -75,9 +74,10 @@ def register():
 
 def login():
     print("\n=== LOGIN ===")
-    global conn, cur
-
-
+    
+    conn = koneksi_db()       
+    cur = conn.cursor() 
+    
     print("Login sebagai:")
     print("[1] Admin")
     print("[2] Guru")
@@ -201,8 +201,9 @@ def show_menu(role, user_id):
     return
 
 def tampilkan_users(role):
-    global conn, cur
-
+    conn = koneksi_db()       
+    cur = conn.cursor()
+    
     if role == 'siswa':
         query = "SELECT id_siswa, nama_siswa, email_siswa, no_hp_siswa, kelas_siswa FROM siswa ORDER BY id_siswa"
         headers = ["ID", "Nama", "Email", "No HP", "Kelas"]
@@ -289,7 +290,8 @@ def tambah_user(role):
     no_induk = input("No Induk: ")
     kelas = input("Kelas: ") if role == 'siswa' else None
 
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     try:
         if role == 'siswa':
@@ -321,7 +323,8 @@ def edit_user(role):
 
     user_id = input(f"ID {role} yang ingin diedit: ")
 
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     try:
         if role == 'admin':
@@ -400,7 +403,8 @@ def hapus_user(role):
 
     user_id = input(f"ID {role} yang ingin dihapus: ")
 
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     try:
         if role == 'admin':
@@ -432,7 +436,6 @@ def hapus_user(role):
         conn.close()
 
 
-
 # Kelola mitra
 def kelola_data_mitra(role, user_id):
     while True:
@@ -459,12 +462,14 @@ def kelola_data_mitra(role, user_id):
             print("Pilihan tidak valid.")
 
 def ambil_data_mitra():
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
     cur.execute("SELECT id_mitra, nama_mitra, alamat_mitra, contact_person_mitra FROM mitra_pkl ORDER BY id_mitra")
     return cur.fetchall()
 
 def tambah_mitra():
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
     
     print("\n=== Tambah Mitra PKL ===")
     nama = input("Nama Mitra: ")
@@ -477,7 +482,8 @@ def tambah_mitra():
     print("Mitra PKL berhasil ditambahkan.")
 
 def edit_mitra():
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
     id_mitra = input("ID mitra yang ingin diedit: ")
 
     cur.execute("SELECT * FROM mitra_pkl WHERE id_mitra = %s", (id_mitra,))
@@ -499,7 +505,8 @@ def edit_mitra():
     print("Mitra berhasil diedit.")
 
 def hapus_mitra():
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
     id_mitra = input("ID mitra yang ingin dihapus: ")
     cur.execute("SELECT * FROM mitra_pkl WHERE id_mitra = %s", (id_mitra,))
     mitra = cur.fetchone()
@@ -515,7 +522,8 @@ def hapus_mitra():
 
 
 def kelola_data_periode(role, user_id): 
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
     while True:
         cur.execute("""
             SELECT id_periode, nama_periode, tanggal_mulai, tanggal_selesai
@@ -559,7 +567,8 @@ def kelola_data_periode(role, user_id):
             
 
 def tambah_periode():
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
     print("\n=== Tambah Periode PKL ===")
     nama = input("Nama Periode: ")
     mulai = input("Tanggal Mulai (YYYY-MM-DD): ")
@@ -580,7 +589,8 @@ def edit_periode():
     print("\n=== Edit Periode PKL ===")
     id_edit = input("ID periode yang ingin diedit: ")
 
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     cur.execute("SELECT nama_periode, tanggal_mulai, tanggal_selesai FROM periode_pkl WHERE id_periode = %s", (id_edit,))
     data = cur.fetchone()
@@ -610,7 +620,8 @@ def hapus_periode():
     print("\n=== Hapus Periode PKL ===")
     id_hapus = input("ID periode yang ingin dihapus: ")
 
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     cur.execute("DELETE FROM periode_pkl WHERE id_periode = %s", (id_hapus,))
     conn.commit()
@@ -622,7 +633,8 @@ def hapus_periode():
 def verifikasi_pengajuan_siswa(role, user_id):
     print("\n=== VERIFIKASI PENGAJUAN PKL ===")
     
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     # Ambil data pengajuan yang masih menunggu persetujuan
     cur.execute("""
@@ -705,7 +717,8 @@ def verifikasi_pengajuan_siswa(role, user_id):
 
 # ROLE SISWA
 def ajukan_pkl(role, user_id):
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     print("\n=== AJUKAN PKL ===")
 
@@ -790,7 +803,8 @@ def ajukan_pkl(role, user_id):
     show_menu(role, user_id)
 
 def lihat_status_verifikasi(role, user_id):
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     print("\n=== DAFTAR PENDAFTARAN PKL ===")
 
@@ -862,7 +876,8 @@ Tanggal Daftar     : {detail[8]}
     show_menu(role, user_id)
 
 def cetak_surat(role, user_id):
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     # Ambil semua pendaftaran user
     query = """
@@ -961,7 +976,8 @@ Panitia PKL
     show_menu(role, user_id)
     
 def buat_laporan(role, user_id):
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     print("\n=== BUAT LAPORAN PKL ===")
 
@@ -1107,7 +1123,8 @@ def buat_laporan(role, user_id):
     conn.close()
 
 def lihat_nilai_akhir(user_id):
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     try:
         cur.execute("""
@@ -1144,7 +1161,8 @@ def lihat_nilai_akhir(user_id):
 
 # ROLE GURU
 def lihat_laporan(role, user_id):
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     print("\n=== DAFTAR LAPORAN SISWA BIMBINGAN ===")
 
@@ -1228,7 +1246,8 @@ def lihat_laporan(role, user_id):
     return lihat_laporan(role, user_id)
 
 def beri_nilai_akhir(role, user_id):
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     print("\n=== PENILAIAN AKHIR SISWA BIMBINGAN ===")
 
@@ -1332,7 +1351,8 @@ def beri_nilai_akhir(role, user_id):
 
 # Semua role
 def show_profile(role, user_id):
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
 
     try:
         if role == 1:  # Admin
@@ -1437,7 +1457,8 @@ def show_profile(role, user_id):
         show_menu(role, user_id)
 
 def main_menu():
-    global conn, cur
+    conn = koneksi_db()       
+    cur = conn.cursor()
     while True:
         print("\n=== SELAMAT DATANG DI SPKL ===")
         print("[1] Login")
