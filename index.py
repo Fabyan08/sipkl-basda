@@ -25,9 +25,8 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def register():
+    global conn, cur
     print("\n=== REGISTRASI ===")
-    conn = koneksi_db()
-    cursor = conn.cursor()
 
     nama = input("Nama: ")
     email = input("Email: ")
@@ -47,7 +46,7 @@ def register():
         no_hp = input("No HP: ")
         nisn = input("NISN: ")
         try:
-            cursor.execute("""
+            cur.execute("""
                 INSERT INTO siswa (nama_siswa, email_siswa, password_siswa, kelas_siswa, no_hp_siswa, nisn)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """, (nama, email, hash_password(password), kelas, no_hp, nisn))
@@ -60,7 +59,7 @@ def register():
         nip = input("NIP: ")
         no_hp = input("No HP: ")
         try:
-            cursor.execute("""
+            cur.execute("""
                 INSERT INTO guru (nama_guru, email_guru, password_guru, nip, no_hp_guru)
                 VALUES (%s, %s, %s, %s, %s)
             """, (nama, email, hash_password(password), nip, no_hp))
@@ -71,13 +70,13 @@ def register():
     else:
         print("Pilihan tidak valid.")
 
-    cursor.close()
+    cur.close()
     conn.close()
 
 def login():
     print("\n=== LOGIN ===")
-    conn = koneksi_db()
-    cursor = conn.cursor()
+    global conn, cur
+
 
     print("Login sebagai:")
     print("[1] Admin")
@@ -115,8 +114,8 @@ def login():
 
     try:
         query = f"SELECT {id_field}, {name_field}, {password_field} FROM {table} WHERE {email_field} = %s"
-        cursor.execute(query, (email,))
-        user = cursor.fetchone()
+        cur.execute(query, (email,))
+        user = cur.fetchone()
 
         if user and user[2] == hash_password(password):
             print(f"Login berhasil! Selamat datang, {user[1]}")
@@ -126,7 +125,7 @@ def login():
     except psycopg2.Error as e:
         print("Terjadi kesalahan saat login:", e)
     finally:
-        cursor.close()
+        cur.close()
         conn.close()
 
 
@@ -202,8 +201,7 @@ def show_menu(role, user_id):
     return
 
 def tampilkan_users(role):
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
 
     if role == 'siswa':
         query = "SELECT id_siswa, nama_siswa, email_siswa, no_hp_siswa, kelas_siswa FROM siswa ORDER BY id_siswa"
@@ -232,7 +230,6 @@ def tampilkan_users(role):
         print(f"\nTidak ada data untuk role: {role}.")
     else:
         print("\n" + tabulate(data, headers=headers, tablefmt="grid"))
-
 
 
 def kelola_data_guru(role, user_id):
@@ -292,8 +289,7 @@ def tambah_user(role):
     no_induk = input("No Induk: ")
     kelas = input("Kelas: ") if role == 'siswa' else None
 
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
 
     try:
         if role == 'siswa':
@@ -325,8 +321,7 @@ def edit_user(role):
 
     user_id = input(f"ID {role} yang ingin diedit: ")
 
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
 
     try:
         if role == 'admin':
@@ -405,11 +400,9 @@ def hapus_user(role):
 
     user_id = input(f"ID {role} yang ingin dihapus: ")
 
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
 
     try:
-        # Tentukan kolom ID berdasarkan role
         if role == 'admin':
             id_col = 'id_admin'
         elif role == 'guru':
@@ -466,11 +459,13 @@ def kelola_data_mitra(role, user_id):
             print("Pilihan tidak valid.")
 
 def ambil_data_mitra():
-    cur = koneksi_db().cursor()
+    global conn, cur
     cur.execute("SELECT id_mitra, nama_mitra, alamat_mitra, contact_person_mitra FROM mitra_pkl ORDER BY id_mitra")
     return cur.fetchall()
 
 def tambah_mitra():
+    global conn, cur
+    
     print("\n=== Tambah Mitra PKL ===")
     nama = input("Nama Mitra: ")
     alamat = input("Alamat: ")
@@ -482,6 +477,7 @@ def tambah_mitra():
     print("Mitra PKL berhasil ditambahkan.")
 
 def edit_mitra():
+    global conn, cur
     id_mitra = input("ID mitra yang ingin diedit: ")
 
     cur.execute("SELECT * FROM mitra_pkl WHERE id_mitra = %s", (id_mitra,))
@@ -503,6 +499,7 @@ def edit_mitra():
     print("Mitra berhasil diedit.")
 
 def hapus_mitra():
+    global conn, cur
     id_mitra = input("ID mitra yang ingin dihapus: ")
     cur.execute("SELECT * FROM mitra_pkl WHERE id_mitra = %s", (id_mitra,))
     mitra = cur.fetchone()
@@ -516,13 +513,10 @@ def hapus_mitra():
         conn.commit()
         print("Mitra berhasil dihapus.")
 
-# Kelola Periode PKL
-from datetime import datetime
 
 def kelola_data_periode(role, user_id): 
+    global conn, cur
     while True:
-        conn = koneksi_db()
-        cur = conn.cursor()
         cur.execute("""
             SELECT id_periode, nama_periode, tanggal_mulai, tanggal_selesai
             FROM periode_pkl
@@ -565,14 +559,13 @@ def kelola_data_periode(role, user_id):
             
 
 def tambah_periode():
+    global conn, cur
     print("\n=== Tambah Periode PKL ===")
     nama = input("Nama Periode: ")
     mulai = input("Tanggal Mulai (YYYY-MM-DD): ")
     selesai = input("Tanggal Selesai (YYYY-MM-DD): ")
     status = 1
 
-    conn = koneksi_db()
-    cur = conn.cursor()
     cur.execute(
         "INSERT INTO periode_pkl (nama_periode, tanggal_mulai, tanggal_selesai, status) VALUES (%s, %s, %s, %s)",
         (nama, mulai, selesai, status)
@@ -587,8 +580,8 @@ def edit_periode():
     print("\n=== Edit Periode PKL ===")
     id_edit = input("ID periode yang ingin diedit: ")
 
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
+
     cur.execute("SELECT nama_periode, tanggal_mulai, tanggal_selesai FROM periode_pkl WHERE id_periode = %s", (id_edit,))
     data = cur.fetchone()
     if not data:
@@ -617,21 +610,19 @@ def hapus_periode():
     print("\n=== Hapus Periode PKL ===")
     id_hapus = input("ID periode yang ingin dihapus: ")
 
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
+
     cur.execute("DELETE FROM periode_pkl WHERE id_periode = %s", (id_hapus,))
     conn.commit()
     cur.close()
     conn.close()
     print("Periode PKL berhasil dihapus.")
 
-# SAMPAI DI STATUS ----
 # Kelola verifikasi siswa
 def verifikasi_pengajuan_siswa(role, user_id):
     print("\n=== VERIFIKASI PENGAJUAN PKL ===")
     
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
 
     # Ambil data pengajuan yang masih menunggu persetujuan
     cur.execute("""
@@ -714,8 +705,7 @@ def verifikasi_pengajuan_siswa(role, user_id):
 
 # ROLE SISWA
 def ajukan_pkl(role, user_id):
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
 
     print("\n=== AJUKAN PKL ===")
 
@@ -798,9 +788,9 @@ def ajukan_pkl(role, user_id):
     print("Pengajuan PKL berhasil dikirim.")
 
     show_menu(role, user_id)
+
 def lihat_status_verifikasi(role, user_id):
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
 
     print("\n=== DAFTAR PENDAFTARAN PKL ===")
 
@@ -872,8 +862,7 @@ Tanggal Daftar     : {detail[8]}
     show_menu(role, user_id)
 
 def cetak_surat(role, user_id):
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
 
     # Ambil semua pendaftaran user
     query = """
@@ -972,9 +961,7 @@ Panitia PKL
     show_menu(role, user_id)
     
 def buat_laporan(role, user_id):
-    import psycopg2
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
 
     print("\n=== BUAT LAPORAN PKL ===")
 
@@ -1120,18 +1107,17 @@ def buat_laporan(role, user_id):
     conn.close()
 
 def lihat_nilai_akhir(user_id):
-    conn = koneksi_db()
-    cursor = conn.cursor()
+    global conn, cur
 
     try:
-        cursor.execute("""
+        cur.execute("""
             SELECT g.nama_guru AS nama_guru, p.nilai_akhir, p.catatan_evaluasi
             FROM penilaian p
             JOIN guru g ON p.guru_id = g.id_guru
             WHERE p.siswa_id = %s
         """, (user_id,))
         
-        data = cursor.fetchall()
+        data = cur.fetchall()
 
         print("\n=== NILAI AKHIR PKL ===")
         if not data:
@@ -1150,17 +1136,15 @@ def lihat_nilai_akhir(user_id):
     except Exception as e:
         print("❌ Terjadi kesalahan saat mengambil nilai:", e)
     finally:
-        cursor.close()
+        cur.close()
         conn.close()
         input("\nTekan Enter untuk kembali ke menu...")
         show_menu(3, user_id)
 
 
-
 # ROLE GURU
 def lihat_laporan(role, user_id):
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
 
     print("\n=== DAFTAR LAPORAN SISWA BIMBINGAN ===")
 
@@ -1187,7 +1171,6 @@ def lihat_laporan(role, user_id):
         nilai = str(lap[5]) if lap[5] is not None else "-"
         print(f"| {str(lap[0]).ljust(2)} | {lap[1][:20].ljust(20)} | {lap[2][:20].ljust(20)} | {lap[3]} | {lap[4][:26].ljust(26)} | {nilai.center(6)} |")
     print("+----+--------------------+----------------------+------------+----------------------------+--------+")
-
 
     # Pilih untuk lihat detail
     try:
@@ -1245,12 +1228,10 @@ def lihat_laporan(role, user_id):
     return lihat_laporan(role, user_id)
 
 def beri_nilai_akhir(role, user_id):
-    conn = koneksi_db()
-    cur = conn.cursor()
+    global conn, cur
 
     print("\n=== PENILAIAN AKHIR SISWA BIMBINGAN ===")
 
-    # 1. Tampilkan daftar siswa yang dibimbing
     query = """
         SELECT 
         p.id_pendaftaran, u.nama_siswa, m.nama_mitra, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai,
@@ -1278,7 +1259,6 @@ def beri_nilai_akhir(role, user_id):
     print("+----+--------------------+--------------------+----------------------+------------+------------+--------+")
 
 
-    # 2. Pilih siswa untuk dinilai
     try:
         siswa_id = int(input("\nMasukkan ID siswa yang ingin dinilai (0 untuk kembali): "))
         if siswa_id == 0:
@@ -1287,7 +1267,6 @@ def beri_nilai_akhir(role, user_id):
         print("❌ ID tidak valid.")
         return beri_nilai_akhir(role, user_id)
 
-    # Pastikan siswa adalah bimbingan user
     cur.execute("""
         SELECT 
             p.id_pendaftaran, u.nama_siswa, m.nama_mitra, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai
@@ -1316,7 +1295,6 @@ def beri_nilai_akhir(role, user_id):
     """)
 
 
-    # 3. Masukkan nilai dan catatan evaluasi
     try:
         nilai = int(input("Masukkan nilai akhir / edit (0-100): "))
         if not (0 <= nilai <= 100):
@@ -1354,8 +1332,7 @@ def beri_nilai_akhir(role, user_id):
 
 # Semua role
 def show_profile(role, user_id):
-    conn = koneksi_db()
-    cursor = conn.cursor()
+    global conn, cur
 
     try:
         if role == 1:  # Admin
@@ -1383,8 +1360,8 @@ def show_profile(role, user_id):
             print("❌ Role tidak dikenali.")
             return
 
-        cursor.execute(f"SELECT * FROM {table} WHERE {kolom_id} = %s", (user_id,))
-        user = cursor.fetchone()
+        cur.execute(f"SELECT * FROM {table} WHERE {kolom_id} = %s", (user_id,))
+        user = cur.fetchone()
 
         if not user:
             print("❌ Data pengguna tidak ditemukan.")
@@ -1448,18 +1425,19 @@ def show_profile(role, user_id):
 
         if kolom:
             nilai_baru = input(f"Masukkan {kolom} baru: ")
-            cursor.execute(f"UPDATE {table} SET {kolom} = %s WHERE {kolom_id} = %s", (nilai_baru, user_id))
+            cur.execute(f"UPDATE {table} SET {kolom} = %s WHERE {kolom_id} = %s", (nilai_baru, user_id))
             conn.commit()
             print(f"✅ {kolom} berhasil diperbarui.")
 
     except Exception as e:
         print("❌ Terjadi kesalahan:", e)
     finally:
-        cursor.close()
+        cur.close()
         conn.close()
         show_menu(role, user_id)
 
 def main_menu():
+    global conn, cur
     while True:
         print("\n=== SELAMAT DATANG DI SPKL ===")
         print("[1] Login")
