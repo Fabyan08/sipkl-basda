@@ -12,10 +12,10 @@ def lihat_laporan(role, user_id):
     print("\n=== DAFTAR LAPORAN SISWA BIMBINGAN ===")
 
     query = """
-        SELECT l.id_laporan, u.nama_siswa AS nama_siswa, m.nama_mitra AS nama_mitra, l.tanggal, l.kegiatan, l.nilai_laporan
+        SELECT l.id_laporan, s.nama_siswa, m.nama_mitra, l.tanggal, l.kegiatan, l.nilai_laporan
         FROM laporan_pkl l
         JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id_pendaftaran
-        JOIN siswa u ON p.siswa_id = u.id_siswa
+        JOIN siswa s ON p.siswa_id = s.id_siswa
         JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
         WHERE p.guru_id = %s
         ORDER BY l.tanggal DESC
@@ -25,6 +25,7 @@ def lihat_laporan(role, user_id):
 
     if not laporan_list:
         print("Belum ada laporan dari siswa bimbingan Anda.\n")
+        input("Tekan Enter untuk kembali...")
         return show_menu(role, user_id)
 
     print("+----+--------------------+----------------------+------------+----------------------------+--------+")
@@ -35,7 +36,6 @@ def lihat_laporan(role, user_id):
         print(f"| {str(lap[0]).ljust(2)} | {lap[1][:20].ljust(20)} | {lap[2][:20].ljust(20)} | {lap[3]} | {lap[4][:26].ljust(26)} | {nilai.center(6)} |")
     print("+----+--------------------+----------------------+------------+----------------------------+--------+")
 
-    # Pilih untuk lihat detail
     try:
         laporan_id = int(input("\nMasukkan ID laporan untuk melihat detail (0 untuk kembali): "))
         if laporan_id == 0:
@@ -44,12 +44,11 @@ def lihat_laporan(role, user_id):
         print("ID tidak valid.")
         return lihat_laporan(role, user_id)
 
-   # Ambil detail laporan
     detail_query = """
-        SELECT l.id_laporan, u.nama_siswa, m.nama_mitra, l.tanggal, l.kegiatan, l.catatan, l.nilai_laporan
+        SELECT l.id_laporan, s.nama_siswa, m.nama_mitra, l.tanggal, l.kegiatan, l.catatan, l.nilai_laporan
         FROM laporan_pkl l
         JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id_pendaftaran
-        JOIN siswa u ON p.siswa_id = u.id_siswa
+        JOIN siswa s ON p.siswa_id = s.id_siswa
         JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
         WHERE l.id_laporan = %s AND p.guru_id = %s
     """
@@ -86,7 +85,6 @@ def lihat_laporan(role, user_id):
         else:
             print("Tidak jadi melakukan edit nilai siswa")
 
-
     input("\nTekan Enter untuk kembali...")
     return lihat_laporan(role, user_id)
 
@@ -98,31 +96,36 @@ def beri_nilai_akhir(role, user_id):
     print("\n=== PENILAIAN AKHIR SISWA BIMBINGAN ===")
 
     query = """
-        SELECT 
-        p.id_pendaftaran, u.nama_siswa, m.nama_mitra, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai,
-        pn.nilai_akhir
-        FROM pendaftaran_pkl p
-        JOIN siswa u ON p.siswa_id = u.id_siswa
-        JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
-        JOIN periode_pkl per ON p.periode_id = per.id_periode
-        LEFT JOIN penilaian pn ON pn.siswa_id = p.id_pendaftaran AND pn.guru_id = %s
-        WHERE p.guru_id = %s
+            SELECT 
+                p.id_pendaftaran, 
+                s.nama_siswa, 
+                m.nama_mitra, 
+                per.nama_periode, 
+                per.tanggal_mulai, 
+                per.tanggal_selesai,
+                pn.nilai_akhir
+            FROM pendaftaran_pkl p
+            JOIN siswa s ON p.siswa_id = s.id_siswa
+            JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
+            JOIN periode_pkl per ON p.periode_id = per.id_periode
+            LEFT JOIN penilaian pn ON pn.pendaftaran_pkl_id = p.id_pendaftaran
+            WHERE p.guru_id = %s
     """
-    cur.execute(query, (user_id, user_id))
+    cur.execute(query, (user_id,))
     siswa_list = cur.fetchall()
 
     if not siswa_list:
         print("Belum ada siswa bimbingan.")
         input("\nTekan Enter untuk kembali...")
         return show_menu(role, user_id)
+
     print("+----+--------------------+--------------------+----------------------+------------+------------+--------+")
     print("| ID | Nama Siswa         | Mitra PKL          | Periode              | Mulai      | Selesai    | Nilai  |")
     print("+----+--------------------+--------------------+----------------------+------------+------------+--------+")
     for s in siswa_list:
-        nilai = s[6] if s[6] is not None else '-'  # Indeks ke-6 sesuai kolom nilai
+        nilai = s[6] if s[6] is not None else '-'
         print(f"| {str(s[0]).ljust(2)} | {s[1][:20].ljust(20)} | {s[2][:20].ljust(20)} | {s[3][:20].ljust(20)} | {s[4]} | {s[5]} | {str(nilai).center(5)} |")
     print("+----+--------------------+--------------------+----------------------+------------+------------+--------+")
-
 
     try:
         siswa_id = int(input("\nMasukkan ID siswa yang ingin dinilai (0 untuk kembali): "))
@@ -134,34 +137,41 @@ def beri_nilai_akhir(role, user_id):
 
     cur.execute("""
         SELECT 
-            p.id_pendaftaran, u.nama_siswa, m.nama_mitra, per.nama_periode, per.tanggal_mulai, per.tanggal_selesai
+            p.id_pendaftaran, s.nama_siswa, m.nama_mitra, per.nama_periode,
+            per.tanggal_mulai, per.tanggal_selesai,
+            pn.nilai_akhir, pn.catatan_evaluasi
         FROM pendaftaran_pkl p
-        JOIN siswa u ON p.siswa_id = u.id_siswa
+        JOIN siswa s ON p.siswa_id = s.id_siswa
         JOIN mitra_pkl m ON p.mitra_id = m.id_mitra
         JOIN periode_pkl per ON p.periode_id = per.id_periode
+        LEFT JOIN penilaian pn ON pn.pendaftaran_pkl_id = p.id_pendaftaran
         WHERE p.id_pendaftaran = %s AND p.guru_id = %s
     """, (siswa_id, user_id))
     siswa = cur.fetchone()
-
 
     if not siswa:
         print("❌ Siswa tidak ditemukan atau bukan bimbingan Anda.")
         input("\nTekan Enter untuk kembali...")
         return beri_nilai_akhir(role, user_id)
 
+    # Ambil nilai dan catatan, jika tidak ada tampilkan "-"
+    nilai_akhir = siswa[6] if siswa[6] is not None else "-"
+    catatan = siswa[7] if siswa[7] is not None else "-"
+
     print(f"""
     === DETAIL SISWA ===
-    ID Pendaftaran : {siswa[0]}
-    Nama Siswa     : {siswa[1]}
-    Mitra PKL      : {siswa[2]}
-    Periode        : {siswa[3]}
-    Tanggal Mulai  : {siswa[4]}
-    Tanggal Selesai: {siswa[5]}
+    ID Pendaftaran    : {siswa[0]}
+    Nama Siswa        : {siswa[1]}
+    Mitra PKL         : {siswa[2]}
+    Periode           : {siswa[3]}
+    Tanggal Mulai     : {siswa[4]}
+    Tanggal Selesai   : {siswa[5]}
+    Nilai Akhir       : {nilai_akhir}
+    Catatan Evaluasi  : {catatan}
     """)
 
-
     try:
-        nilai = int(input("Masukkan nilai akhir / edit (0-100): "))
+        nilai = int(input("Masukkan nilai akhir / edit (0-100) / 'enter' untuk kembali: "))
         if not (0 <= nilai <= 100):
             print("❌ Nilai harus antara 0 sampai 100.")
             return beri_nilai_akhir(role, user_id)
@@ -171,8 +181,7 @@ def beri_nilai_akhir(role, user_id):
 
     catatan = input("Masukkan catatan evaluasi (opsional): ").strip()
 
-    # Cek apakah penilaian sudah ada
-    cur.execute("SELECT id_penilaian FROM penilaian WHERE siswa_id = %s AND guru_id = %s", (siswa_id, user_id))
+    cur.execute("SELECT id_penilaian FROM penilaian WHERE pendaftaran_pkl_id = %s", (siswa_id,))
     existing = cur.fetchone()
 
     try:
@@ -183,9 +192,9 @@ def beri_nilai_akhir(role, user_id):
             print("✅ Penilaian berhasil diperbarui.")
         else:
             cur.execute("""
-                INSERT INTO penilaian (siswa_id, guru_id, nilai_akhir, catatan_evaluasi)
-                VALUES (%s, %s, %s, %s)
-            """, (siswa_id, user_id, nilai, catatan))
+                INSERT INTO penilaian (pendaftaran_pkl_id, nilai_akhir, catatan_evaluasi)
+                VALUES (%s, %s, %s)
+            """, (siswa_id, nilai, catatan,))
             print("✅ Penilaian berhasil disimpan.")
 
         conn.commit()

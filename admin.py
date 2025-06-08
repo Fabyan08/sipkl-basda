@@ -91,7 +91,10 @@ def tambah_user(role):
     if role not in ['admin', 'guru', 'siswa']:
         print("Role tidak dikenali.")
         return
-
+    if role == 'siswa':
+        print("\n=== TAMBAH SISWA ===")
+    elif role == 'guru':
+        print("\n=== TAMBAH GURU ===")
     nama = input("Nama: ")
     email = input("Email: ")
     password = input("Password: ")
@@ -126,7 +129,6 @@ def tambah_user(role):
         conn.close()
 
 def edit_user(role):
-    clear_screen()
     if role not in ['admin', 'guru', 'siswa']:
         print("Role tidak dikenali.")
         return
@@ -206,7 +208,6 @@ def edit_user(role):
         conn.close()
 
 def hapus_user(role):
-    clear_screen()
     if role not in ['admin', 'guru', 'siswa']:
         print("Role tidak dikenali.")
         return
@@ -298,7 +299,6 @@ def tambah_mitra():
     conn.close()
 
 def edit_mitra():
-    clear_screen()
     conn = koneksi_db()       
     cur = conn.cursor()
     id_mitra = input("ID mitra yang ingin diedit: ")
@@ -323,7 +323,6 @@ def edit_mitra():
     print("Mitra berhasil diedit.")
 
 def hapus_mitra():
-    clear_screen()
     conn = koneksi_db()       
     cur = conn.cursor()
     id_mitra = input("ID mitra yang ingin dihapus: ")
@@ -406,7 +405,6 @@ def tambah_periode(role, user_id):
     show_menu(role, user_id)
 
 def edit_periode(role, user_id):
-    clear_screen()
     print("\n=== Edit Periode PKL ===")
     id_edit = input("ID periode yang ingin diedit: ")
 
@@ -439,7 +437,6 @@ def edit_periode(role, user_id):
     show_menu(role, user_id)
 
 def hapus_periode(role, user_id):
-    clear_screen()
     print("\n=== Hapus Periode PKL ===")
     id_hapus = input("ID periode yang ingin dihapus: ")
 
@@ -455,7 +452,6 @@ def hapus_periode(role, user_id):
     
 # Kelola verifikasi siswa
 def verifikasi_pengajuan_siswa(role, user_id):
-    clear_screen()
     print("\n=== VERIFIKASI PENGAJUAN PKL ===")
     
     conn = koneksi_db()       
@@ -475,6 +471,7 @@ def verifikasi_pengajuan_siswa(role, user_id):
 
     if not data:
         print("Tidak ada pengajuan yang perlu diverifikasi.")
+        input("Tekan Enter untuk kembali ke menu utama...")
         return show_menu(role, user_id)
 
     # Tampilkan daftar pengajuan
@@ -527,9 +524,9 @@ def verifikasi_pengajuan_siswa(role, user_id):
     try:
         cur.execute("""
             UPDATE pendaftaran_pkl 
-            SET status_pendaftaran = 'disetujui', guru_id = %s 
+            SET status_pendaftaran = 'disetujui', guru_id = %s , admin_id = %s
             WHERE id_pendaftaran = %s
-        """, (guru_id, id_pengajuan))
+        """, (guru_id,  user_id, id_pengajuan))
         conn.commit()
         print("✅ Pengajuan berhasil disetujui dan guru pembimbing ditetapkan.")
     except Exception as e:

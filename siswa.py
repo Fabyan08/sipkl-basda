@@ -38,6 +38,7 @@ def ajukan_pkl(role, user_id):
     cur.execute("SELECT * FROM pendaftaran_pkl WHERE siswa_id = %s", (user_id,))
     if cur.fetchone():
         print("Kamu sudah pernah mengajukan PKL dan tidak bisa mengajukan lagi.")
+        input("Tekan enter untuk kembali...")
         cur.close()
         conn.close()
         show_menu(role, user_id)
@@ -163,7 +164,7 @@ Tanggal Daftar     : {detail[8]}
         """)
     else:
         print("ID pendaftaran tidak ditemukan atau tidak sesuai dengan akun Anda.")
-
+    input("Tekan enter untuk kembali...")
     # Kembali ke menu siswa
     show_menu(role, user_id)
 
@@ -263,13 +264,14 @@ Panitia PKL
 """)
 
     # Simpan file PDF
-    nama_file = f"{id_pendaftar}_{nama_user.replace(' ', '_')}.pdf"
+    nama_file = f"surat/{id_pendaftar}_{nama_user.replace(' ', '_')}.pdf"
     pdf.output(nama_file)
     print(f"Surat pengantar berhasil dicetak: {nama_file}")
+    input ("Tekan enter untuk kembali ke menu...")
     show_menu(role, user_id)
     
 def buat_laporan(role, user_id):
-    clear_screen()
+    # clear_screen()
     conn = koneksi_db()       
     cur = conn.cursor()
 
@@ -319,10 +321,12 @@ def buat_laporan(role, user_id):
 
     # Tampilkan semua laporan sebelumnya
     query_laporan = """
-        SELECT id_laporan, tanggal, kegiatan, catatan, nilai_laporan
-        FROM laporan_pkl
-        WHERE siswa_id = %s AND pendaftaran_pkl = %s
-        ORDER BY tanggal DESC
+        SELECT l.id_laporan, l.tanggal, l.kegiatan, l.catatan, l.nilai_laporan
+        FROM laporan_pkl l
+        JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id_pendaftaran
+        WHERE p.siswa_id = %s AND p.id_pendaftaran = %s
+        ORDER BY l.tanggal DESC
+
     """
     cur.execute(query_laporan, (user_id, pkl_id))
     laporan_list = cur.fetchall()
@@ -333,7 +337,7 @@ def buat_laporan(role, user_id):
         print("| ID | Tanggal    | Kegiatan                     | Catatan        | Nilai   |")
         print("+----+------------+------------------------------+----------------+---------+")
         for lap in laporan_list:
-            print(f"| {str(lap[0]).ljust(2)} | {str(lap[1])} | {lap[2][:28].ljust(28)} | {lap[3][:14].ljust(14)} |  {lap[4]} |")
+            print(f"| {str(lap[0]).ljust(2)} | {str(lap[1])} | {lap[2][:28].ljust(28)} | {lap[3][:14].ljust(14)} |  {lap[4] if lap[4] is not None else "-"}  "   "|")
         print("+----+------------+------------------------------+----------------+---------+")
     else:
         print("ℹ️  Belum ada laporan untuk pendaftaran ini.")
@@ -354,10 +358,10 @@ def buat_laporan(role, user_id):
 
         try:
             query_insert = """
-                INSERT INTO laporan_pkl (siswa_id, tanggal, kegiatan, catatan, pendaftaran_pkl)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO laporan_pkl (tanggal, kegiatan, catatan, pendaftaran_pkl)
+                VALUES (%s, %s, %s, %s)
             """
-            cur.execute(query_insert, (user_id, tanggal, kegiatan, catatan, pkl_id))
+            cur.execute(query_insert, (tanggal, kegiatan, catatan, pkl_id))
             conn.commit()
             print("✅ Laporan berhasil ditambahkan.\n")
         except Exception as e:
@@ -368,7 +372,7 @@ def buat_laporan(role, user_id):
     elif aksi == '2':
         try:
             edit_id = int(input("Masukkan ID laporan yang ingin diedit: "))
-            cur.execute("SELECT tanggal, kegiatan, catatan FROM laporan_pkl WHERE id_laporan = %s AND siswa_id = %s", (edit_id, user_id))
+            cur.execute("SELECT l.tanggal, l.kegiatan, l.catatan FROM laporan_pkl l JOIN pendaftaran_pkl p ON l.pendaftaran_pkl = p.id_pendaftaran WHERE l.id_laporan = %s", (edit_id,))
             existing = cur.fetchone()
 
             if not existing:
@@ -384,11 +388,15 @@ def buat_laporan(role, user_id):
             query_update = """
                 UPDATE laporan_pkl
                 SET tanggal = %s, kegiatan = %s, catatan = %s
-                WHERE id_laporan = %s AND siswa_id = %s
+                FROM pendaftaran_pkl
+                WHERE laporan_pkl.pendaftaran_pkl = pendaftaran_pkl.id_pendaftaran
+                AND laporan_pkl.id_laporan = %s
+                AND pendaftaran_pkl.siswa_id = %s
             """
             cur.execute(query_update, (tanggal, kegiatan, catatan, edit_id, user_id))
             conn.commit()
             print("✅ Laporan berhasil diperbarui.\n")
+            input("Tekan Enter untuk melanjutkan...")
             show_menu(role, user_id)
         except Exception as e:
             print("❌ Gagal memperbarui laporan:", e)
@@ -398,10 +406,11 @@ def buat_laporan(role, user_id):
     elif aksi == '3':
         try:
             del_id = int(input("Masukkan ID laporan yang ingin dihapus: "))
-            query_delete = "DELETE FROM laporan_pkl WHERE id_laporan = %s AND siswa_id = %s"
+            query_delete = "DELETE FROM laporan_pkl USING pendaftaran_pkl WHERE laporan_pkl.pendaftaran_pkl = pendaftaran_pkl.id_pendaftaran AND laporan_pkl.id_laporan = %s AND pendaftaran_pkl.siswa_id = %s"
             cur.execute(query_delete, (del_id, user_id))
             conn.commit()
             print("✅ Laporan berhasil dihapus.\n")
+            input("Tekan Enter untuk melanjutkan...")
         except Exception as e:
             print("❌ Gagal menghapus laporan:", e)
 
@@ -415,7 +424,7 @@ def buat_laporan(role, user_id):
         return buat_laporan(role, user_id)
 
     conn.close()
-
+    
 def lihat_nilai_akhir(user_id):
     clear_screen()
     conn = koneksi_db()       
@@ -425,8 +434,9 @@ def lihat_nilai_akhir(user_id):
         cur.execute("""
             SELECT g.nama_guru AS nama_guru, p.nilai_akhir, p.catatan_evaluasi
             FROM penilaian p
-            JOIN guru g ON p.guru_id = g.id_guru
-            WHERE p.siswa_id = %s
+            JOIN pendaftaran_pkl pd ON p.pendaftaran_pkl_id = pd.id_pendaftaran
+            JOIN guru g ON pd.guru_id = g.id_guru
+            WHERE pd.siswa_id = %s
         """, (user_id,))
         
         data = cur.fetchall()
@@ -440,11 +450,11 @@ def lihat_nilai_akhir(user_id):
             print("+----------------------+--------+--------------------------------------+")
             for row in data:
                 guru = row[0][:20].ljust(20)
-                nilai = str(row[1]).ljust(6)
-                catatan = (row[2][:35] + "...") if len(row[2]) > 35 else row[2].ljust(35)
+                nilai = str(row[1]) if row[1] is not None else "-"
+                nilai = nilai.ljust(6)
+                catatan = (row[2][:35] + "...") if row[2] and len(row[2]) > 35 else (row[2] or "-").ljust(35)
                 print(f"| {guru} | {nilai} | {catatan} |")
             print("+----------------------+--------+--------------------------------------+")
-
     except Exception as e:
         print("❌ Terjadi kesalahan saat mengambil nilai:", e)
     finally:
@@ -452,4 +462,3 @@ def lihat_nilai_akhir(user_id):
         conn.close()
         input("\nTekan Enter untuk kembali ke menu...")
         show_menu(3, user_id)
-

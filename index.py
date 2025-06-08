@@ -124,9 +124,10 @@ def main_menu():
 
         if pilihan == '1':
             login()
-        elif pilihan == '2':
+        elif pilihan == '2':    
             register()
         elif pilihan == '9':
+            clear_screen()
             print("Sampai jumpa!")
             break
         else:
