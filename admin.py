@@ -391,11 +391,10 @@ def tambah_periode(role, user_id):
     nama = input("Nama Periode: ")
     mulai = input("Tanggal Mulai (YYYY-MM-DD): ")
     selesai = input("Tanggal Selesai (YYYY-MM-DD): ")
-    status = 1
 
     cur.execute(
-        "INSERT INTO periode_pkl (nama_periode, tanggal_mulai, tanggal_selesai, status) VALUES (%s, %s, %s, %s)",
-        (nama, mulai, selesai, status)
+        "INSERT INTO periode_pkl (nama_periode, tanggal_mulai, tanggal_selesai) VALUES (%s, %s, %s)",
+        (nama, mulai, selesai,)
     )
 
     conn.commit()
